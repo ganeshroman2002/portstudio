@@ -84,8 +84,15 @@ export default function EditProfilePage() {
           primary_category: formData.primary_category,
         });
         
-        if (error) alert("Error saving profile: " + error.message);
-        else alert("Profile saved successfully!");
+        if (error) {
+          if (error.message?.includes('profiles_username_key')) {
+            alert("That username is already taken by someone else. Please choose a different username!");
+          } else {
+            alert("Error saving profile: " + error.message);
+          }
+        } else {
+          alert("Profile saved successfully!");
+        }
       }
       
       if (activeTab === "Social Links") {

@@ -55,19 +55,24 @@ export default function TalentOnboardingPage() {
 
       // Proceed to highly secure checkout
       window.location.replace("/checkout");
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving profile:", error);
+      if (error.message?.includes('profiles_username_key')) {
+        alert("That username is already taken by someone else. Please choose a different username!");
+      } else {
+        alert("Database Error: " + (error.message || JSON.stringify(error)));
+      }
       setLoading(false);
     }
   };
   return (
-    <div className="min-h-screen bg-[#fafafa] flex flex-col items-center justify-center p-4 sm:p-8">
-      <div className="w-full max-w-3xl bg-white rounded-[2rem] p-8 sm:p-12 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 my-8">
+    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4 sm:p-8">
+      <div className="w-full max-w-3xl bg-card rounded-[2rem] p-8 sm:p-12 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-border my-8">
         
         {/* Header */}
         <div className="text-center mb-10">
-          <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 mb-3 tracking-tight">Set Up Your Profile</h1>
-          <p className="text-slate-500 text-sm sm:text-base max-w-lg mx-auto">
+          <h1 className="text-3xl sm:text-4xl font-extrabold text-foreground mb-3 tracking-tight">Set Up Your Profile</h1>
+          <p className="text-muted-foreground text-sm sm:text-base max-w-lg mx-auto">
             Welcome to PortStudio! Let's get your talent profile set up so you can start showcasing your work to the world.
           </p>
         </div>
@@ -87,16 +92,16 @@ export default function TalentOnboardingPage() {
                 <Camera className="w-4 h-4 text-white" />
               </div>
             </div>
-            <p className="text-xs text-slate-500 mt-4 font-medium">Upload Profile Photo</p>
+            <p className="text-xs text-muted-foreground mt-4 font-medium">Upload Profile Photo</p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             {/* Full Name */}
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-700">Full Name</label>
+              <label className="text-sm font-semibold text-foreground">Full Name</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                  <User className="h-4 w-4 text-slate-400" />
+                  <User className="h-4 w-4 text-muted-foreground" />
                 </div>
                 <input 
                   type="text" 
@@ -105,17 +110,17 @@ export default function TalentOnboardingPage() {
                   onChange={handleInputChange}
                   placeholder="Jane Doe"
                   required
-                  className="w-full pl-10 pr-4 py-3 bg-slate-50/50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-colors"
+                  className="w-full pl-10 pr-4 py-3 bg-transparent border border-border rounded-xl text-sm focus:bg-card focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-colors"
                 />
               </div>
             </div>
 
             {/* Username */}
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-700">Username</label>
+              <label className="text-sm font-semibold text-foreground">Username</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                  <AtSign className="h-4 w-4 text-slate-400" />
+                  <AtSign className="h-4 w-4 text-muted-foreground" />
                 </div>
                 <input 
                   type="text" 
@@ -124,7 +129,7 @@ export default function TalentOnboardingPage() {
                   onChange={handleInputChange}
                   placeholder="janedoe"
                   required
-                  className="w-full pl-10 pr-4 py-3 bg-slate-50/50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-colors"
+                  className="w-full pl-10 pr-4 py-3 bg-transparent border border-border rounded-xl text-sm focus:bg-card focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-colors"
                 />
               </div>
             </div>
@@ -132,10 +137,10 @@ export default function TalentOnboardingPage() {
 
           {/* Professional Headline */}
           <div className="space-y-2">
-            <label className="text-sm font-semibold text-slate-700">Professional Headline</label>
+            <label className="text-sm font-semibold text-foreground">Professional Headline</label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                <Briefcase className="h-4 w-4 text-slate-400" />
+                <Briefcase className="h-4 w-4 text-muted-foreground" />
               </div>
               <input 
                 type="text" 
@@ -143,16 +148,16 @@ export default function TalentOnboardingPage() {
                 value={formData.headline}
                 onChange={handleInputChange}
                 placeholder="Senior Product Designer & UX Researcher"
-                className="w-full pl-10 pr-4 py-3 bg-slate-50/50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-colors"
+                className="w-full pl-10 pr-4 py-3 bg-transparent border border-border rounded-xl text-sm focus:bg-card focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-colors"
               />
             </div>
           </div>
 
           {/* Bio */}
           <div className="space-y-2">
-            <label className="text-sm font-semibold text-slate-700 flex justify-between">
+            <label className="text-sm font-semibold text-foreground flex justify-between">
               <span>Bio</span>
-              <span className="text-slate-400 font-normal text-xs">Max 500 characters</span>
+              <span className="text-muted-foreground font-normal text-xs">Max 500 characters</span>
             </label>
             <textarea 
               name="bio"
@@ -160,17 +165,17 @@ export default function TalentOnboardingPage() {
               onChange={handleInputChange}
               rows={4}
               placeholder="Tell us about your professional background, what you excel at, and what you're passionate about..."
-              className="w-full p-4 bg-slate-50/50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-colors resize-none"
+              className="w-full p-4 bg-transparent border border-border rounded-xl text-sm focus:bg-card focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-colors resize-none"
             ></textarea>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             {/* Location */}
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-700">Location</label>
+              <label className="text-sm font-semibold text-foreground">Location</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                  <MapPin className="h-4 w-4 text-slate-400" />
+                  <MapPin className="h-4 w-4 text-muted-foreground" />
                 </div>
                 <input 
                   type="text" 
@@ -178,17 +183,17 @@ export default function TalentOnboardingPage() {
                   value={formData.location}
                   onChange={handleInputChange}
                   placeholder="San Francisco, CA"
-                  className="w-full pl-10 pr-4 py-3 bg-slate-50/50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-colors"
+                  className="w-full pl-10 pr-4 py-3 bg-transparent border border-border rounded-xl text-sm focus:bg-card focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-colors"
                 />
               </div>
             </div>
 
             {/* Languages */}
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-700">Languages</label>
+              <label className="text-sm font-semibold text-foreground">Languages</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                  <Globe className="h-4 w-4 text-slate-400" />
+                  <Globe className="h-4 w-4 text-muted-foreground" />
                 </div>
                 <input 
                   type="text" 
@@ -196,7 +201,7 @@ export default function TalentOnboardingPage() {
                   value={formData.languages}
                   onChange={handleInputChange}
                   placeholder="English, Spanish (Comma separated)"
-                  className="w-full pl-10 pr-4 py-3 bg-slate-50/50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-colors"
+                  className="w-full pl-10 pr-4 py-3 bg-transparent border border-border rounded-xl text-sm focus:bg-card focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-colors"
                 />
               </div>
             </div>
@@ -205,16 +210,16 @@ export default function TalentOnboardingPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             {/* Availability */}
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-700">Availability</label>
+              <label className="text-sm font-semibold text-foreground">Availability</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                  <CalendarClock className="h-4 w-4 text-slate-400" />
+                  <CalendarClock className="h-4 w-4 text-muted-foreground" />
                 </div>
                 <select 
                   name="availability"
                   value={formData.availability}
                   onChange={handleInputChange}
-                  className="w-full pl-10 pr-4 py-3 bg-slate-50/50 border border-slate-200 rounded-xl text-sm text-slate-700 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-colors appearance-none"
+                  className="w-full pl-10 pr-4 py-3 bg-transparent border border-border rounded-xl text-sm text-foreground focus:bg-card focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-colors appearance-none"
                 >
                   <option value="" disabled>Select availability</option>
                   <option value="full-time">Available for Full-time</option>
@@ -223,7 +228,7 @@ export default function TalentOnboardingPage() {
                   <option value="not-looking">Not looking right now</option>
                 </select>
                 <div className="absolute inset-y-0 right-0 pr-3.5 flex items-center pointer-events-none">
-                  <svg className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className="h-4 w-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
                   </svg>
                 </div>
@@ -232,10 +237,10 @@ export default function TalentOnboardingPage() {
 
             {/* Social/Portfolio Link */}
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-700">Portfolio / Social Link</label>
+              <label className="text-sm font-semibold text-foreground">Portfolio / Social Link</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-                  <LinkIcon className="h-4 w-4 text-slate-400" />
+                  <LinkIcon className="h-4 w-4 text-muted-foreground" />
                 </div>
                 <input 
                   type="url" 
@@ -243,7 +248,7 @@ export default function TalentOnboardingPage() {
                   value={formData.portfolio_link}
                   onChange={handleInputChange}
                   placeholder="https://yourportfolio.com"
-                  className="w-full pl-10 pr-4 py-3 bg-slate-50/50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-colors"
+                  className="w-full pl-10 pr-4 py-3 bg-transparent border border-border rounded-xl text-sm focus:bg-card focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-colors"
                 />
               </div>
             </div>

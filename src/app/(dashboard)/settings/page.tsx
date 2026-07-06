@@ -1,14 +1,21 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import { useTheme } from "next-themes";
-import { Moon, Sun, ArrowLeft } from "lucide-react";
+import { Moon, Sun, ArrowLeft, LogOut } from "lucide-react";
 import Link from "next/link";
+import { createClient } from "@/lib/client";
 
 export default function SettingsPage() {
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
+  const supabase = createClient();
 
   useEffect(() => setMounted(true), []);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    window.location.href = "/auth";
+  };
 
   if (!mounted) return null;
 
@@ -37,6 +44,25 @@ export default function SettingsPage() {
             >
               {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
               {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
+            </button>
+          </div>
+        </div>
+
+        <h3 className="text-xl font-extrabold mb-4 mt-8">Account</h3>
+        
+        <div className="bg-slate-50 dark:bg-slate-900 rounded-2xl border border-border p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-bold text-[15px] text-rose-500">Log Out</p>
+              <p className="text-[14px] text-muted-foreground">Securely sign out of your account.</p>
+            </div>
+            
+            <button 
+              onClick={handleLogout}
+              className="flex items-center gap-2 px-4 py-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 rounded-full font-bold transition-colors"
+            >
+              <LogOut className="w-4 h-4" />
+              Log Out
             </button>
           </div>
         </div>
