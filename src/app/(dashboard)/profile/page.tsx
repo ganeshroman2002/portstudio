@@ -142,8 +142,17 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          <div className="flex justify-end pt-3 px-4 h-[72px]">
-            <Link href="/profile/edit" className="px-4 py-1.5 border border-border rounded-full font-bold hover:bg-slate-200/20 dark:hover:bg-slate-800/50 transition-colors text-[15px] h-fit">
+          <div className="flex justify-end items-start gap-4 pt-3 px-4 h-[72px]">
+            <div className="flex flex-col gap-1.5 min-w-[140px] bg-slate-50 dark:bg-[#16181c] px-3 py-2 rounded-xl border border-border hidden sm:flex">
+              <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider">
+                <span className="text-muted-foreground">Pitches</span>
+                <span className="text-indigo-500">{pitches.length} / 3</span>
+              </div>
+              <div className="w-full bg-slate-200 dark:bg-slate-800 rounded-full h-1.5">
+                <div className="bg-indigo-500 h-1.5 rounded-full transition-all" style={{ width: `${Math.min((pitches.length / 3) * 100, 100)}%` }}></div>
+              </div>
+            </div>
+            <Link href="/profile/edit" className="px-4 py-1.5 border border-border rounded-full font-bold hover:bg-slate-200/20 dark:hover:bg-slate-800/50 transition-colors text-[15px] h-fit shrink-0">
               Edit profile
             </Link>
           </div>

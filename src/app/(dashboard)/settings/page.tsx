@@ -8,9 +8,20 @@ import { createClient } from "@/lib/client";
 export default function SettingsPage() {
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const supabase = createClient();
 
-  useEffect(() => setMounted(true), []);
+  useEffect(() => {
+    setMounted(true);
+    const savedMode = localStorage.getItem('portstudio_view_mode') as 'grid' | 'list';
+    if (savedMode) setViewMode(savedMode);
+  }, []);
+
+  const handleSetViewMode = (mode: 'grid' | 'list') => {
+    setViewMode(mode);
+    localStorage.setItem('portstudio_view_mode', mode);
+    window.dispatchEvent(new CustomEvent('viewModeChanged', { detail: mode }));
+  };
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -45,6 +56,55 @@ export default function SettingsPage() {
               {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
               {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
             </button>
+          </div>
+        </div>
+
+        <div className="bg-slate-50 dark:bg-slate-900 rounded-2xl border border-border p-4 mt-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-bold text-[15px]">Feed View</p>
+              <p className="text-[14px] text-muted-foreground">Choose your preferred default feed layout.</p>
+            </div>
+            
+            <div className="flex bg-slate-200/50 dark:bg-slate-800 rounded-lg p-1">
+              <button 
+                onClick={() => handleSetViewMode('grid')} 
+                className={`px-4 py-1.5 rounded-md transition-colors text-[14px] font-bold ${viewMode === 'grid' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                Grid
+              </button>
+              <button 
+                onClick={() => handleSetViewMode('list')} 
+                className={`px-4 py-1.5 rounded-md transition-colors text-[14px] font-bold ${viewMode === 'list' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                List
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <h3 className="text-xl font-extrabold mb-4 mt-8">Subscription</h3>
+        
+        <div className="bg-slate-50 dark:bg-slate-900 rounded-2xl border border-border p-4">
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-bold text-[15px]">Current Plan</p>
+                <p className="text-[14px] text-indigo-500 font-bold">Free Tier</p>
+              </div>
+              <Link href="/premium" className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-full font-bold transition-colors text-[14px]">
+                Upgrade
+              </Link>
+            </div>
+            <div className="pt-3 border-t border-border">
+              <div className="flex justify-between text-[13px] mb-1">
+                <span className="font-bold">Pitch Limit</span>
+                <span className="text-muted-foreground">Max 3 allowed</span>
+              </div>
+              <div className="w-full bg-slate-200 dark:bg-slate-800 rounded-full h-2">
+                <div className="bg-indigo-500 h-2 rounded-full" style={{ width: '33%' }}></div>
+              </div>
+            </div>
           </div>
         </div>
 

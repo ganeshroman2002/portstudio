@@ -12,6 +12,7 @@ export default function HomeFeedPage() {
   const [selectedPitch, setSelectedPitch] = useState<any>(null);
   const [suggestedUsers, setSuggestedUsers] = useState<any[]>([]);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [zoomedImage, setZoomedImage] = useState<string | null>(null);
 
   const fetchPitches = async () => {
     setLoading(true);
@@ -35,7 +36,21 @@ export default function HomeFeedPage() {
 
   useEffect(() => {
     fetchPitches();
+    const savedMode = localStorage.getItem('portstudio_view_mode') as 'grid' | 'list';
+    if (savedMode) setViewMode(savedMode);
+
+    const handleViewModeChange = (e: any) => {
+      if (e.detail) setViewMode(e.detail);
+    };
+    window.addEventListener('viewModeChanged', handleViewModeChange);
+    return () => window.removeEventListener('viewModeChanged', handleViewModeChange);
   }, []);
+
+  const handleSetViewMode = (mode: 'grid' | 'list') => {
+    setViewMode(mode);
+    localStorage.setItem('portstudio_view_mode', mode);
+    window.dispatchEvent(new CustomEvent('viewModeChanged', { detail: mode }));
+  };
 
   return (
     <div className="flex w-full h-full relative">
@@ -48,8 +63,8 @@ export default function HomeFeedPage() {
             <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-md px-4 py-3 flex items-center justify-between border-b border-border">
               <h2 className="text-xl font-bold leading-tight cursor-pointer">Home</h2>
               <div className="flex bg-slate-100 dark:bg-slate-800/80 rounded-lg p-1">
-                <button onClick={() => setViewMode('grid')} className={`p-1.5 rounded-md transition-colors ${viewMode === 'grid' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}><LayoutGrid className="w-4 h-4" /></button>
-                <button onClick={() => setViewMode('list')} className={`p-1.5 rounded-md transition-colors ${viewMode === 'list' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}><List className="w-4 h-4" /></button>
+                <button onClick={() => handleSetViewMode('grid')} className={`p-1.5 rounded-md transition-colors ${viewMode === 'grid' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}><LayoutGrid className="w-4 h-4" /></button>
+                <button onClick={() => handleSetViewMode('list')} className={`p-1.5 rounded-md transition-colors ${viewMode === 'list' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}><List className="w-4 h-4" /></button>
               </div>
             </div>
 
@@ -259,7 +274,10 @@ export default function HomeFeedPage() {
                   {selectedPitch.cover_banner_url && (
                     <div>
                       <h3 className="font-bold text-lg mb-3">Cover</h3>
-                      <div className="w-full aspect-[21/9] bg-slate-200 dark:bg-slate-800 rounded-xl overflow-hidden relative border border-border">
+                      <div 
+                        className="w-full aspect-[21/9] bg-slate-200 dark:bg-slate-800 rounded-xl overflow-hidden relative border border-border cursor-zoom-in"
+                        onClick={() => setZoomedImage(selectedPitch.cover_banner_url)}
+                      >
                         <img src={selectedPitch.cover_banner_url} className="w-full h-full object-cover" />
                       </div>
                     </div>
@@ -270,7 +288,11 @@ export default function HomeFeedPage() {
                       <h3 className="font-bold text-lg mb-3">Portfolio Showcase</h3>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         {selectedPitch.portfolio_images.map((img: string, idx: number) => img && (
-                          <div key={idx} className="aspect-[4/3] bg-slate-100 dark:bg-slate-800 rounded-xl overflow-hidden border border-border">
+                          <div 
+                            key={idx} 
+                            className="aspect-[4/3] bg-slate-100 dark:bg-slate-800 rounded-xl overflow-hidden border border-border cursor-zoom-in"
+                            onClick={() => setZoomedImage(img)}
+                          >
                             <img src={img} className="w-full h-full object-cover hover:scale-105 transition-transform duration-300" />
                           </div>
                         ))}
@@ -391,9 +413,9 @@ export default function HomeFeedPage() {
                         <span className="font-bold text-[15px] mt-1">{selectedPitch.notice_period || 'Immediate'}</span>
                       </div>
                       {selectedPitch.expected_salary && (
-                        <div className="bg-slate-50 dark:bg-[#16181c] border border-border rounded-xl p-3.5 flex flex-col justify-center">
-                          <span className="text-[11px] text-muted-foreground font-semibold uppercase tracking-wide">Expected Salary</span>
-                          <span className="font-bold text-[15px] mt-1">₹{selectedPitch.expected_salary.toLocaleString()} / mo</span>
+                        <div className="bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/30 rounded-xl p-3.5 flex flex-col justify-center">
+                          <span className="text-[11px] text-indigo-600 dark:text-indigo-400 font-semibold uppercase tracking-wide">Expected Salary</span>
+                          <span className="font-bold text-[15px] text-indigo-700 dark:text-indigo-300 mt-1">₹{selectedPitch.expected_salary.toLocaleString()} / mo</span>
                         </div>
                       )}
                     </>
@@ -409,9 +431,9 @@ export default function HomeFeedPage() {
                         <span className="font-bold text-[15px] mt-1">{selectedPitch.hours_available} hrs/wk</span>
                       </div>
                       {selectedPitch.hourly_rate && (
-                        <div className="bg-slate-50 dark:bg-[#16181c] border border-border rounded-xl p-3.5 flex flex-col justify-center">
-                          <span className="text-[11px] text-muted-foreground font-semibold uppercase tracking-wide">Hourly Rate</span>
-                          <span className="font-bold text-[15px] mt-1">₹{selectedPitch.hourly_rate.toLocaleString()} / hr</span>
+                        <div className="bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/30 rounded-xl p-3.5 flex flex-col justify-center">
+                          <span className="text-[11px] text-indigo-600 dark:text-indigo-400 font-semibold uppercase tracking-wide">Hourly Rate</span>
+                          <span className="font-bold text-[15px] text-indigo-700 dark:text-indigo-300 mt-1">₹{selectedPitch.hourly_rate.toLocaleString()} / hr</span>
                         </div>
                       )}
                     </>
@@ -431,9 +453,9 @@ export default function HomeFeedPage() {
                         <span className="font-bold text-[15px] mt-1">{selectedPitch.engagement_rate || 'N/A'}</span>
                       </div>
                       {selectedPitch.rate_per_post && (
-                        <div className="bg-slate-50 dark:bg-[#16181c] border border-border rounded-xl p-3.5 flex flex-col justify-center">
-                          <span className="text-[11px] text-muted-foreground font-semibold uppercase tracking-wide">Rate per Post</span>
-                          <span className="font-bold text-[15px] mt-1">₹{selectedPitch.rate_per_post.toLocaleString()}</span>
+                        <div className="bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/30 rounded-xl p-3.5 flex flex-col justify-center">
+                          <span className="text-[11px] text-indigo-600 dark:text-indigo-400 font-semibold uppercase tracking-wide">Rate per Post</span>
+                          <span className="font-bold text-[15px] text-indigo-700 dark:text-indigo-300 mt-1">₹{selectedPitch.rate_per_post.toLocaleString()}</span>
                         </div>
                       )}
                     </>
@@ -449,15 +471,25 @@ export default function HomeFeedPage() {
                 </div>
               )}
 
-              <div className="mt-4 pb-24">
-                <button className="w-full py-3.5 bg-indigo-500 hover:bg-indigo-600 text-white transition-colors rounded-xl font-bold text-[16px] shadow-lg shadow-indigo-500/20">
-                  {selectedPitch.persona_type === 'job_seeker' ? 'Apply now' : selectedPitch.persona_type === 'freelancer' ? 'Hire for project' : 'Request collab'}
-                </button>
-              </div>
+              <div className="pb-24"></div>
             </div>
           );
         })()}
       </aside>
+
+      {/* Fullscreen Image Zoom */}
+      {zoomedImage && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm p-4 sm:p-8 cursor-zoom-out"
+          onClick={() => setZoomedImage(null)}
+        >
+          <img 
+            src={zoomedImage} 
+            className="max-w-full max-h-full object-contain rounded-lg shadow-2xl" 
+            alt="Full screen view" 
+          />
+        </div>
+      )}
     </div>
   );
 }
