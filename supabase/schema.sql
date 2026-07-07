@@ -10,6 +10,7 @@ create table public.profiles (
   full_name text,
   username text unique,
   avatar_url text,
+  banner_url text,
   headline text,
   bio text,
   location text,
@@ -158,3 +159,107 @@ $$ language plpgsql security definer;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
+
+
+-- 6. TALENT PITCHES (Showcase Posts)
+create table public.talent_pitches (
+  id uuid default gen_random_uuid() primary key,
+  profile_id uuid references public.profiles(id) on delete cascade not null,
+  persona_type text not null, -- 'job_seeker', 'freelancer', 'influencer'
+  cover_banner_url text,
+  full_name text not null,
+  tagline text not null,
+  industry text not null,
+  location text not null,
+  skills text[],
+  about text,
+  portfolio_images text[], -- Up to 4 image URLs
+  
+  -- Job Seeker fields
+  desired_job_title text,
+  experience_level text,
+  notice_period text,
+  expected_salary numeric,
+  
+  -- Freelancer fields
+  turnaround_time text,
+  hours_available numeric,
+  portfolio_link text,
+  hourly_rate numeric,
+  
+  -- Influencer fields
+  content_niche text,
+  followers_count text,
+  engagement_rate text,
+  rate_per_post numeric,
+  
+  created_at timestamp with time zone default timezone('utc'::text, now())
+);
+
+-- ==========================================
+-- STORAGE BUCKETS & POLICIES
+-- ==========================================
+-- Insert the bucket if it doesn't exist
+insert into storage.buckets (id, name, public) 
+values ('avatars', 'avatars', true)
+on conflict (id) do nothing;
+
+-- FORCE the bucket to be public (in case it was created manually as private)
+update storage.buckets set public = true where id = 'avatars';
+
+-- Allow public read access to avatars
+create policy "Avatar images are publicly accessible."
+  on storage.objects for select
+  using ( bucket_id = 'avatars' );
+
+-- Allow authenticated users to upload their own avatars
+create policy "Anyone can upload an avatar."
+  on storage.objects for insert
+  with check ( bucket_id = 'avatars' and auth.role() = 'authenticated' );
+
+-- Allow users to update their own avatars
+create policy "Anyone can update their avatar."
+  on storage.objects for update
+  using ( bucket_id = 'avatars' and auth.role() = 'authenticated' );
+
+-- ==========================================
+-- BANNERS BUCKET
+-- ==========================================
+insert into storage.buckets (id, name, public) 
+values ('banners', 'banners', true)
+on conflict (id) do nothing;
+
+update storage.buckets set public = true where id = 'banners';
+
+create policy "Banner images are publicly accessible."
+  on storage.objects for select
+  using ( bucket_id = 'banners' );
+
+create policy "Anyone can upload a banner."
+  on storage.objects for insert
+  with check ( bucket_id = 'banners' and auth.role() = 'authenticated' );
+
+create policy "Anyone can update their banner."
+  on storage.objects for update
+  using ( bucket_id = 'banners' and auth.role() = 'authenticated' );
+
+-- ==========================================
+-- PORTFOLIOS BUCKET (For Showcase Media)
+-- ==========================================
+insert into storage.buckets (id, name, public) 
+values ('portfolios', 'portfolios', true)
+on conflict (id) do nothing;
+
+update storage.buckets set public = true where id = 'portfolios';
+
+create policy "Portfolio images are publicly accessible."
+  on storage.objects for select
+  using ( bucket_id = 'portfolios' );
+
+create policy "Anyone can upload a portfolio image."
+  on storage.objects for insert
+  with check ( bucket_id = 'portfolios' and auth.role() = 'authenticated' );
+
+create policy "Anyone can update their portfolio image."
+  on storage.objects for update
+  using ( bucket_id = 'portfolios' and auth.role() = 'authenticated' );

@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { 
   Home, Search, Bell, Mail, Star, User, MoreHorizontal, 
-  Settings, Sparkles
+  Settings, Sparkles, Plus
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -10,7 +10,9 @@ import { createClient } from "@/lib/client";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const isPublishPage = pathname === '/publish';
   const [profile, setProfile] = useState<any>(null);
+  const [suggestedUsers, setSuggestedUsers] = useState<any[]>([]);
   const supabase = createClient();
 
   useEffect(() => {
@@ -20,6 +22,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         // Fetch the user's detailed profile from the newly created profiles table
         const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single();
         if (data) setProfile(data);
+
+        // Fetch suggested users (excluding current user)
+        const { data: users } = await supabase.from('profiles').select('*').neq('id', user.id).limit(3);
+        if (users) setSuggestedUsers(users);
       }
     };
     fetchProfile();
@@ -65,10 +71,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </nav>
 
             {/* Post Button */}
-            <button className="w-12 h-12 xl:w-full xl:h-[52px] bg-indigo-500 hover:bg-indigo-600 text-white rounded-full mt-4 flex items-center justify-center transition-colors shadow-sm">
-              <span className="hidden xl:block text-[17px] font-bold">Post</span>
-              <Sparkles className="w-6 h-6 xl:hidden" />
-            </button>
+            <Link href="/publish" className="w-12 h-12 xl:w-full xl:h-[52px] bg-indigo-500 hover:bg-indigo-600 text-white rounded-full mt-4 flex items-center justify-center transition-colors shadow-sm">
+              <span className="hidden xl:block text-[17px] font-bold">Publish Pitch</span>
+              <Plus className="w-6 h-6 xl:hidden" />
+            </Link>
           </div>
 
           {/* User Profile Mini */}
@@ -95,14 +101,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* ========================================================= */}
         {/* CENTER (Dynamic Page Content)                             */}
         {/* ========================================================= */}
-        <main className="flex-1 max-w-[600px] h-full overflow-y-auto hide-scrollbar border-r border-border">
+        {/* ========================================================= */}
+        {/* CENTER (Dynamic Page Content)                             */}
+        {/* ========================================================= */}
+        <main className={`flex-1 h-full overflow-y-auto hide-scrollbar ${(isPublishPage || pathname === '/') ? '' : 'max-w-[600px] border-r border-border'}`}>
           {children}
         </main>
 
         {/* ========================================================= */}
         {/* RIGHT SIDEBAR (Discovery)                                 */}
         {/* ========================================================= */}
-        <aside className="hidden lg:flex flex-col w-[350px] shrink-0 px-4 py-1 h-full overflow-y-auto hide-scrollbar">
+        {!(isPublishPage || pathname === '/') && (
+          <aside className="hidden lg:flex flex-col w-[350px] shrink-0 px-4 py-1 h-full overflow-y-auto hide-scrollbar">
           
           {/* Search Bar */}
           <div className="sticky top-0 bg-background pt-1 pb-3 z-10">
@@ -122,17 +132,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div className="bg-slate-50 dark:bg-[#16181c] rounded-2xl border border-border mb-4 pt-3 pb-1">
             <h2 className="px-4 text-[20px] font-extrabold mb-3">You might like</h2>
             
-            {[
-              { name: "MacRumors.com", handle: "@MacRumors", avatar: "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=150&q=80" },
-              { name: "Satya Nadella", handle: "@satyanadella", avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&q=80" },
-              { name: "Cristiano Ronaldo", handle: "@Cristiano", avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&q=80" }
-            ].map((user, i) => (
+            {suggestedUsers.map((user, i) => (
               <div key={i} className="px-4 py-3 flex items-center justify-between hover:bg-slate-200/20 dark:hover:bg-slate-800/50 transition-colors cursor-pointer">
                 <div className="flex gap-3">
-                  <img src={user.avatar} className="w-10 h-10 rounded-full object-cover" />
+                  <img src={user.avatar_url || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&q=80"} className="w-10 h-10 rounded-full object-cover" />
                   <div className="flex flex-col leading-tight">
-                    <span className="font-bold text-[15px] hover:underline">{user.name}</span>
-                    <span className="text-[15px] text-muted-foreground">{user.handle}</span>
+                    <span className="font-bold text-[15px] hover:underline">{user.full_name || 'User'}</span>
+                    <span className="text-[15px] text-muted-foreground">{user.username ? `@${user.username}` : ''}</span>
                   </div>
                 </div>
                 <button className="bg-foreground text-background px-4 py-1.5 rounded-full font-bold text-[14px] hover:opacity-90 transition-opacity">
@@ -167,8 +173,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               Show more
             </div>
           </div>
-
         </aside>
+        )}
 
       </div>
     </div>

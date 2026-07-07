@@ -1,13 +1,36 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import { CheckCircle, Calendar, MapPin, Link as LinkIcon, ArrowLeft, Loader2 } from "lucide-react";
+import { Calendar, MapPin, Link as LinkIcon, ArrowLeft, Loader2, X, Code, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { createClient } from "@/lib/client";
 
 export default function ProfilePage() {
   const [activeTab, setActiveTab] = useState("Posts");
+  const [followModal, setFollowModal] = useState<'followers' | 'following' | null>(null);
   const [profile, setProfile] = useState<any>(null);
+  const [pitches, setPitches] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedPitch, setSelectedPitch] = useState<any>(null);
+
+  const renderFormattedText = (text: string) => {
+    if (!text) return null;
+    const parts = text.split(/((?:^|\s)[@#][a-zA-Z0-9_]+)/g);
+    return parts.map((part, i) => {
+      const isTag = /^(?:\s*)([@#][a-zA-Z0-9_]+)$/.test(part);
+      if (isTag) {
+        const match = part.match(/([@#][a-zA-Z0-9_]+)/);
+        const tag = match ? match[1] : part;
+        const prefix = part.replace(tag, '');
+        return (
+          <React.Fragment key={i}>
+            {prefix}
+            <span className="text-indigo-500 font-bold hover:underline cursor-pointer">{tag}</span>
+          </React.Fragment>
+        );
+      }
+      return <React.Fragment key={i}>{part}</React.Fragment>;
+    });
+  };
   const supabase = createClient();
 
   useEffect(() => {
@@ -16,6 +39,13 @@ export default function ProfilePage() {
       if (user) {
         const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single();
         if (data) setProfile(data);
+
+        const { data: userPitches } = await supabase
+          .from('talent_pitches')
+          .select('*, profiles(full_name, username, avatar_url)')
+          .eq('profile_id', user.id)
+          .order('created_at', { ascending: false });
+        if (userPitches) setPitches(userPitches);
       }
       setLoading(false);
     };
@@ -26,6 +56,63 @@ export default function ProfilePage() {
     return (
       <div className="flex h-full items-center justify-center">
         <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
+      </div>
+    );
+  }
+
+  if (followModal) {
+    return (
+      <div className="w-full flex flex-col h-full bg-background relative">
+        {/* Header */}
+        <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-md px-4 py-2 flex items-center gap-6 cursor-pointer border-b border-border">
+          <button onClick={() => setFollowModal(null)} className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-slate-200/20 dark:hover:bg-slate-800/50 transition-colors">
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <div className="flex flex-col">
+            <h2 className="text-xl font-bold leading-tight">{profile?.full_name}</h2>
+            <span className="text-[13px] text-muted-foreground">@{profile?.username}</span>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex border-b border-border shrink-0">
+          {['followers', 'following'].map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setFollowModal(tab as any)}
+              className={`flex-1 h-[53px] flex items-center justify-center relative hover:bg-slate-200/20 dark:hover:bg-slate-800/50 transition-colors ${followModal === tab ? 'font-bold text-foreground' : 'text-muted-foreground font-medium'}`}
+            >
+              <span className="capitalize">{tab}</span>
+              {followModal === tab && (
+                <div className="absolute bottom-0 w-16 h-1 bg-indigo-500 rounded-full" />
+              )}
+            </button>
+          ))}
+        </div>
+
+        {/* List */}
+        <div className="flex-1 w-full">
+          {[
+            { name: "369 Labs", handle: "@369labsx", bio: "ai & marketing", avatar: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=150&q=80" },
+            { name: "OpenAI", handle: "@OpenAI", bio: "OpenAI’s mission is to ensure that artificial general intelligence benefits all of humanity.", avatar: "https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=150&q=80" },
+            { name: "Sarang Patil", handle: "@SarangP55046923", bio: "There are dreams created which needs to be fulfilled", avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&q=80" },
+            { name: "Elon Musk", handle: "@elonmusk", bio: "Starmind", avatar: "https://images.unsplash.com/photo-1568602471122-7832951cc4c5?w=150&q=80" },
+          ].map((u, i) => (
+            <div key={i} className="flex items-start justify-between p-4 hover:bg-slate-50/50 dark:hover:bg-slate-900/50 transition-colors cursor-pointer border-b border-border/50">
+              <div className="flex gap-3 flex-1 overflow-hidden mr-4">
+                <img src={u.avatar} alt={u.name} className="w-10 h-10 rounded-full object-cover shrink-0" />
+                <div className="flex flex-col min-w-0">
+                  <span className="font-bold text-[15px] hover:underline truncate leading-tight">{u.name}</span>
+                  <span className="text-[15px] text-muted-foreground truncate leading-tight">{u.handle}</span>
+                  <p className="text-[15px] mt-1 line-clamp-2">{u.bio}</p>
+                </div>
+              </div>
+              <button className="bg-foreground text-background shrink-0 px-4 py-1.5 rounded-full font-bold text-[14px] hover:opacity-90 transition-opacity mt-1">
+                Following
+              </button>
+            </div>
+          ))}
+        </div>
       </div>
     );
   }
@@ -43,63 +130,66 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* Banner & Avatar */}
-      <div className="relative">
-        <div className="w-full aspect-[3/1] bg-slate-200 dark:bg-slate-800">
-          <img src="https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=800" alt="Banner" className="w-full h-full object-cover" />
-        </div>
-        
-        <div className="absolute -bottom-16 left-4 border-4 border-background rounded-full bg-slate-200">
-          <img src={profile?.avatar_url || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&q=80"} alt="Avatar" className="w-32 h-32 rounded-full object-cover" />
-        </div>
-        
-        <div className="flex justify-end pt-3 px-4 h-[68px]">
-          <Link href="/profile/edit" className="px-4 py-1.5 border border-border rounded-full font-bold hover:bg-slate-200/20 dark:hover:bg-slate-800/50 transition-colors text-[15px]">
-            Edit profile
-          </Link>
-        </div>
-      </div>
+      {/* Profile Card Module */}
+      <div className="bg-card rounded-2xl border border-border overflow-hidden mx-4 mt-4 shadow-sm pb-4">
+        {/* Banner & Avatar */}
+        <div>
+          <div className="relative w-full aspect-[3/1] bg-slate-200 dark:bg-slate-800">
+            <img src={profile?.banner_url || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=800"} alt="Banner" className="w-full h-full object-cover" />
 
-      {/* Profile Info */}
-      <div className="px-4 pt-3 pb-4">
-        <div className="flex flex-col">
-          <div className="flex items-center gap-1">
-            <h1 className="text-xl font-extrabold leading-tight">{profile?.full_name || "New User"}</h1>
-            {profile?.username && <CheckCircle className="w-5 h-5 text-indigo-500 fill-indigo-500/20" />}
-          </div>
-          <span className="text-[15px] text-muted-foreground">{profile?.username ? `@${profile.username}` : ""}</span>
-        </div>
-
-        <div className="mt-3 text-[15px] leading-snug">
-          {profile?.bio || "This user hasn't written a bio yet."}
-        </div>
-
-        <div className="flex flex-wrap gap-x-4 gap-y-2 mt-3 text-[15px] text-muted-foreground">
-          {profile?.location && (
-            <div className="flex items-center gap-1">
-              <MapPin className="w-4 h-4" /> {profile.location}
+            <div className="absolute -bottom-16 left-4 rounded-full border-4 border-card bg-slate-200">
+              <img src={profile?.avatar_url || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&q=80"} alt="Avatar" className="w-32 h-32 rounded-full object-cover" />
             </div>
-          )}
-          {/* We will add real joined date and external links later */}
-          <div className="flex items-center gap-1">
-            <Calendar className="w-4 h-4" /> Joined Recently
+          </div>
+
+          <div className="flex justify-end pt-3 px-4 h-[72px]">
+            <Link href="/profile/edit" className="px-4 py-1.5 border border-border rounded-full font-bold hover:bg-slate-200/20 dark:hover:bg-slate-800/50 transition-colors text-[15px] h-fit">
+              Edit profile
+            </Link>
           </div>
         </div>
 
-        <div className="flex gap-5 mt-3 text-[14px]">
-          <div className="hover:underline cursor-pointer">
-            <strong className="text-foreground">842</strong> <span className="text-muted-foreground">Following</span>
+        {/* Profile Info */}
+        <div className="px-4 pt-3 flex flex-col sm:flex-row sm:justify-between items-start gap-4">
+          <div className="flex flex-col max-w-lg">
+            <div className="flex items-center gap-1">
+              <h1 className="text-xl font-extrabold leading-tight">{profile?.full_name || "New User"}</h1>
+            </div>
+            <span className="text-[15px] text-muted-foreground">{profile?.username ? `@${profile.username}` : ""}</span>
+
+            <div className="mt-3 text-[15px] leading-snug">
+              {profile?.bio || "This user hasn't written a bio yet."}
+            </div>
           </div>
-          <div className="hover:underline cursor-pointer">
-            <strong className="text-foreground">3,241</strong> <span className="text-muted-foreground">Followers</span>
+
+          <div className="flex flex-col sm:items-end gap-2 shrink-0 sm:mt-1">
+            <div className="flex gap-5 text-[14px]">
+              <div onClick={() => setFollowModal('following')} className="hover:underline cursor-pointer">
+                <strong className="text-foreground">842</strong> <span className="text-muted-foreground">Following</span>
+              </div>
+              <div onClick={() => setFollowModal('followers')} className="hover:underline cursor-pointer">
+                <strong className="text-foreground">3,241</strong> <span className="text-muted-foreground">Followers</span>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap sm:justify-end gap-x-4 gap-y-2 mt-1 text-[13px] text-muted-foreground">
+              {profile?.location && (
+                <div className="flex items-center gap-1">
+                  <MapPin className="w-3.5 h-3.5" /> {profile.location}
+                </div>
+              )}
+              <div className="flex items-center gap-1">
+                <Calendar className="w-3.5 h-3.5" /> Joined Recently
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
       {/* Profile Tabs */}
-      <div className="flex border-b border-border overflow-x-auto hide-scrollbar">
+      <div className="flex border-b border-border overflow-x-auto hide-scrollbar sticky top-[52px] z-10 bg-background/80 backdrop-blur-md mt-2">
         {["Posts", "Replies", "Highlights", "Articles", "Media", "Likes"].map((tab) => (
-          <button 
+          <button
             key={tab}
             onClick={() => setActiveTab(tab)}
             className={`flex-1 min-w-[80px] h-[53px] flex items-center justify-center relative hover:bg-slate-200/20 dark:hover:bg-slate-800/50 transition-colors ${activeTab === tab ? 'font-bold text-foreground' : 'text-muted-foreground font-medium'}`}
@@ -112,27 +202,238 @@ export default function ProfilePage() {
         ))}
       </div>
 
-      {/* Feed Content Placeholder */}
-      <div className="w-full">
-        {[1, 2, 3].map((post) => (
-          <div key={post} className="p-4 border-b border-border hover:bg-slate-50/50 dark:hover:bg-slate-900/50 transition-colors cursor-pointer flex gap-3">
-            <img src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&q=80" alt="Avatar" className="w-10 h-10 rounded-full object-cover shrink-0" />
-            <div className="flex flex-col w-full">
-              <div className="flex items-center gap-1 text-[15px]">
-                <span className="font-bold hover:underline">Alex Stanton</span>
-                <CheckCircle className="w-4 h-4 text-indigo-500 fill-indigo-500/20" />
-                <span className="text-muted-foreground">@alexstanton · 2h</span>
+      {/* Feed Content */}
+      <div className="w-full bg-slate-50/50 dark:bg-[#16181c] min-h-screen">
+        {pitches.length === 0 ? (
+          <div className="p-8 text-center text-muted-foreground">
+            No pitches added yet.
+          </div>
+        ) : (
+          <div className="flex flex-col p-4 gap-6">
+            {pitches.map((pitch) => (
+              <div key={pitch.id} className="w-full border border-border rounded-2xl overflow-hidden bg-card shadow-sm hover:shadow-md transition-shadow">
+                
+                {/* Card Banner */}
+                <div className="w-full aspect-[3/1] bg-slate-200 dark:bg-slate-800 relative">
+                  {pitch.cover_banner_url && <img src={pitch.cover_banner_url} className="w-full h-full object-cover" />}
+                  <div className="absolute -bottom-8 left-4 w-16 h-16 bg-slate-300 dark:bg-slate-700 rounded-full border-4 border-card flex items-center justify-center overflow-hidden text-xl font-bold">
+                    {pitch.profiles?.avatar_url ? (
+                      <img src={pitch.profiles.avatar_url} className="w-full h-full object-cover" />
+                    ) : (
+                      <img src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&q=80" className="w-full h-full object-cover" />
+                    )}
+                  </div>
+                  
+                  {/* Persona Badge */}
+                  <div className="absolute top-3 right-3 px-3 py-1 bg-black/60 backdrop-blur-md rounded-full text-white text-[11px] font-bold uppercase tracking-wider">
+                    {pitch.persona_type === 'job_seeker' ? 'Job Seeker' : pitch.persona_type === 'freelancer' ? 'Freelancer' : 'Influencer'}
+                  </div>
+                </div>
+
+                <div className="p-4 pt-10 flex flex-col gap-1">
+                  <div className="flex justify-between items-start">
+                    <div className="flex flex-col">
+                      <div className="flex items-center gap-1.5">
+                        <h4 className="font-extrabold text-lg leading-tight hover:underline cursor-pointer">{pitch.full_name}</h4>
+                        <span className="text-muted-foreground text-[14px]">@{pitch.profiles?.username || 'user'}</span>
+                      </div>
+                      <p className="text-[14px] leading-tight text-muted-foreground mt-0.5">{pitch.tagline}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center gap-2 mt-2 text-[13px] font-medium">
+                    <span className="text-indigo-500 font-bold">
+                      {pitch.persona_type === 'job_seeker' ? 'Open to hire' : pitch.persona_type === 'freelancer' ? 'Available for projects' : 'Open for collabs'}
+                    </span>
+                    <span className="text-muted-foreground">•</span>
+                    <span className="text-muted-foreground">{pitch.location} - {pitch.industry}</span>
+                  </div>
+
+                  {pitch.skills && pitch.skills.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mt-3">
+                      {pitch.skills.map((skill: string, i: number) => skill.trim() && (
+                        <span key={i} className="px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[11px] font-bold rounded-md">
+                          {skill.trim()}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {pitch.portfolio_link && (
+                    <div className="mt-3">
+                      <a href={pitch.portfolio_link.startsWith('http') ? pitch.portfolio_link : `https://${pitch.portfolio_link}`} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 text-[13px] text-indigo-500 hover:underline font-medium" onClick={e => e.stopPropagation()}>
+                        <LinkIcon className="w-4 h-4" /> {pitch.portfolio_link}
+                      </a>
+                    </div>
+                  )}
+
+                  <div className="flex gap-4 mt-4">
+                    <button 
+                      onClick={() => setSelectedPitch(pitch)}
+                      className="flex-1 py-2 bg-indigo-500 hover:bg-indigo-600 text-white transition-colors rounded-lg font-bold text-[14px]"
+                    >
+                      View Pitch Details
+                    </button>
+                    <button className="px-4 py-2 bg-transparent border border-border hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors rounded-lg font-bold text-[14px]">
+                      Share
+                    </button>
+                  </div>
+                </div>
               </div>
-              <p className="text-[15px] mt-1">
-                Just finished designing the new dashboard layout. Taking heavy inspiration from some of my favorite social platforms to ensure it feels incredibly familiar and user-friendly right out of the box! What do you guys think? 🎨✨
-              </p>
-              <div className="mt-3 w-full aspect-video bg-slate-200 dark:bg-slate-800 rounded-2xl border border-border overflow-hidden">
-                 <img src="https://images.unsplash.com/photo-1555066931-4365d14bab8c?q=80&w=800" alt="Post media" className="w-full h-full object-cover" />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Expanded Pitch Modal */}
+      {selectedPitch && (
+        <div className="fixed inset-0 z-50 flex justify-center bg-black/60 backdrop-blur-sm p-4 sm:pt-[5%] overflow-y-auto">
+          <div className="bg-background w-full max-w-2xl h-fit rounded-2xl border border-border flex flex-col shadow-2xl relative mb-8 overflow-hidden">
+            
+            {/* Modal Banner */}
+            <div className="w-full aspect-[3/1] bg-slate-200 dark:bg-slate-800 relative">
+              <button onClick={() => setSelectedPitch(null)} className="absolute top-4 right-4 z-10 w-9 h-9 bg-black/50 text-white rounded-full flex items-center justify-center hover:bg-black/70 transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+              {selectedPitch.cover_banner_url && <img src={selectedPitch.cover_banner_url} className="w-full h-full object-cover" />}
+              <div className="absolute -bottom-10 left-6 w-24 h-24 bg-slate-300 dark:bg-slate-700 rounded-full border-[6px] border-background flex items-center justify-center overflow-hidden text-2xl font-bold">
+                {selectedPitch.profiles?.avatar_url ? (
+                  <img src={selectedPitch.profiles.avatar_url} className="w-full h-full object-cover" />
+                ) : (
+                  <img src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&q=80" className="w-full h-full object-cover" />
+                )}
+              </div>
+            </div>
+
+            <div className="p-6 pt-14 flex flex-col gap-1">
+              <h4 className="font-extrabold text-2xl leading-tight">{selectedPitch.full_name}</h4>
+              <p className="text-lg leading-tight text-muted-foreground mt-1">{selectedPitch.tagline}</p>
+              
+              <div className="flex items-center gap-2 mt-2 text-[15px] font-medium">
+                <span className="text-indigo-500 font-bold">
+                  {selectedPitch.persona_type === 'job_seeker' ? 'Open to hire' : selectedPitch.persona_type === 'freelancer' ? 'Available for projects' : 'Open for collabs'}
+                </span>
+                <span className="text-muted-foreground">•</span>
+                <span className="text-muted-foreground">{selectedPitch.location} - {selectedPitch.industry}</span>
+              </div>
+
+              {selectedPitch.skills && selectedPitch.skills.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-4">
+                  {selectedPitch.skills.map((skill: string, i: number) => skill.trim() && (
+                    <span key={i} className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[13px] font-bold rounded-lg">
+                      {skill.trim()}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {selectedPitch.portfolio_link && (
+                <div className="mt-4">
+                  <a href={selectedPitch.portfolio_link.startsWith('http') ? selectedPitch.portfolio_link : `https://${selectedPitch.portfolio_link}`} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 text-[14px] text-indigo-500 hover:underline font-medium">
+                    <LinkIcon className="w-4 h-4" /> {selectedPitch.portfolio_link}
+                  </a>
+                </div>
+              )}
+
+              {selectedPitch.about && (
+                <div className="mt-6">
+                  <h3 className="font-bold text-lg mb-2">About</h3>
+                  <p className="text-[15px] leading-relaxed whitespace-pre-wrap text-muted-foreground bg-slate-50 dark:bg-[#16181c] p-4 rounded-xl border border-border">{renderFormattedText(selectedPitch.about)}</p>
+                </div>
+              )}
+
+              {/* Showcase thumbnails */}
+              {selectedPitch.portfolio_images && selectedPitch.portfolio_images.length > 0 && (
+                <div className="mt-6">
+                  <h3 className="font-bold text-lg mb-2">Portfolio Showcase</h3>
+                  <div className="grid grid-cols-2 gap-3">
+                    {selectedPitch.portfolio_images.map((img: string, idx: number) => img && (
+                      <div key={idx} className="aspect-[4/3] bg-slate-100 dark:bg-slate-800 rounded-xl overflow-hidden border border-border">
+                        <img src={img} className="w-full h-full object-cover hover:scale-105 transition-transform duration-300" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Stats / Badges */}
+              <div className="mt-6">
+                 <h3 className="font-bold text-lg mb-2">Details</h3>
+                 <div className="grid grid-cols-2 gap-3">
+                  {selectedPitch.persona_type === 'job_seeker' && (
+                    <>
+                      <div className="bg-slate-50 dark:bg-[#16181c] border border-border rounded-xl p-4 flex flex-col justify-center">
+                        <span className="text-[12px] text-muted-foreground font-semibold uppercase">Desired job title</span>
+                        <span className="font-bold text-[16px] mt-1">{selectedPitch.desired_job_title}</span>
+                      </div>
+                      <div className="bg-slate-50 dark:bg-[#16181c] border border-border rounded-xl p-4 flex flex-col justify-center">
+                        <span className="text-[12px] text-muted-foreground font-semibold uppercase">Experience</span>
+                        <span className="font-bold text-[16px] mt-1">{selectedPitch.experience_level}</span>
+                      </div>
+                      <div className="bg-slate-50 dark:bg-[#16181c] border border-border rounded-xl p-4 flex flex-col justify-center">
+                        <span className="text-[12px] text-muted-foreground font-semibold uppercase">Notice Period</span>
+                        <span className="font-bold text-[16px] mt-1">{selectedPitch.notice_period || 'Immediate'}</span>
+                      </div>
+                      {selectedPitch.expected_salary && (
+                         <div className="bg-slate-50 dark:bg-[#16181c] border border-border rounded-xl p-4 flex flex-col justify-center">
+                           <span className="text-[12px] text-muted-foreground font-semibold uppercase">Expected Salary</span>
+                           <span className="font-bold text-[16px] mt-1">₹{selectedPitch.expected_salary.toLocaleString()} / mo</span>
+                         </div>
+                      )}
+                    </>
+                  )}
+                  {selectedPitch.persona_type === 'freelancer' && (
+                    <>
+                      <div className="bg-slate-50 dark:bg-[#16181c] border border-border rounded-xl p-4 flex flex-col justify-center">
+                        <span className="text-[12px] text-muted-foreground font-semibold uppercase">Turnaround</span>
+                        <span className="font-bold text-[16px] mt-1">{selectedPitch.turnaround_time}</span>
+                      </div>
+                      <div className="bg-slate-50 dark:bg-[#16181c] border border-border rounded-xl p-4 flex flex-col justify-center">
+                        <span className="text-[12px] text-muted-foreground font-semibold uppercase">Availability</span>
+                        <span className="font-bold text-[16px] mt-1">{selectedPitch.hours_available} hrs/wk</span>
+                      </div>
+                      {selectedPitch.hourly_rate && (
+                         <div className="bg-slate-50 dark:bg-[#16181c] border border-border rounded-xl p-4 flex flex-col justify-center">
+                           <span className="text-[12px] text-muted-foreground font-semibold uppercase">Hourly Rate</span>
+                           <span className="font-bold text-[16px] mt-1">₹{selectedPitch.hourly_rate.toLocaleString()} / hr</span>
+                         </div>
+                      )}
+                    </>
+                  )}
+                  {selectedPitch.persona_type === 'influencer' && (
+                    <>
+                      <div className="bg-slate-50 dark:bg-[#16181c] border border-border rounded-xl p-4 flex flex-col justify-center">
+                        <span className="text-[12px] text-muted-foreground font-semibold uppercase">Content niche</span>
+                        <span className="font-bold text-[16px] mt-1">{selectedPitch.content_niche}</span>
+                      </div>
+                      <div className="bg-slate-50 dark:bg-[#16181c] border border-border rounded-xl p-4 flex flex-col justify-center">
+                        <span className="text-[12px] text-muted-foreground font-semibold uppercase">Followers</span>
+                        <span className="font-bold text-[16px] mt-1">{selectedPitch.followers_count}</span>
+                      </div>
+                      <div className="bg-slate-50 dark:bg-[#16181c] border border-border rounded-xl p-4 flex flex-col justify-center">
+                        <span className="text-[12px] text-muted-foreground font-semibold uppercase">Engagement Rate</span>
+                        <span className="font-bold text-[16px] mt-1">{selectedPitch.engagement_rate || 'N/A'}</span>
+                      </div>
+                       {selectedPitch.rate_per_post && (
+                         <div className="bg-slate-50 dark:bg-[#16181c] border border-border rounded-xl p-4 flex flex-col justify-center">
+                           <span className="text-[12px] text-muted-foreground font-semibold uppercase">Rate per Post</span>
+                           <span className="font-bold text-[16px] mt-1">₹{selectedPitch.rate_per_post.toLocaleString()}</span>
+                         </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex gap-4 mt-8 pb-4">
+                <button className="flex-1 py-3.5 bg-indigo-500 hover:bg-indigo-600 text-white transition-colors rounded-xl font-bold text-[16px] shadow-lg shadow-indigo-500/20">
+                  {selectedPitch.persona_type === 'job_seeker' ? 'Apply now' : selectedPitch.persona_type === 'freelancer' ? 'Hire for project' : 'Request collab'}
+                </button>
               </div>
             </div>
           </div>
-        ))}
-      </div>
+        </div>
+      )}
     </>
   );
 }

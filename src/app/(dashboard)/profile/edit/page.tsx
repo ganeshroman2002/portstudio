@@ -3,6 +3,7 @@ import React, { useState, useEffect } from "react";
 import { ArrowLeft, Loader2, Save, Plus, Trash2, AlertCircle } from "lucide-react";
 import Link from "next/link";
 import { createClient } from "@/lib/client";
+import imageCompression from "browser-image-compression";
 
 const TABS = [
   "Basic Information",
@@ -17,6 +18,8 @@ export default function EditProfilePage() {
   const [activeTab, setActiveTab] = useState(TABS[0]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [uploadingBanner, setUploadingBanner] = useState(false);
   
   // Data States
   const [userSession, setUserSession] = useState<any>(null);
@@ -77,6 +80,8 @@ export default function EditProfilePage() {
           id: userSession.id,
           full_name: formData.full_name,
           username: formData.username,
+          avatar_url: formData.avatar_url || undefined,
+          banner_url: formData.banner_url || undefined,
           headline: formData.headline,
           bio: formData.bio,
           location: formData.location,
@@ -110,6 +115,62 @@ export default function EditProfilePage() {
       }
     }
     setSaving(false);
+  };
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    try {
+      setUploadingAvatar(true);
+      if (!e.target.files || e.target.files.length === 0) return;
+      
+      const file = e.target.files[0];
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
+
+      const options = {
+        maxSizeMB: 1,
+        maxWidthOrHeight: 800,
+        useWebWorker: true,
+      };
+      const compressedFile = await imageCompression(file, options);
+
+      const { error: uploadError } = await supabase.storage.from('avatars').upload(fileName, compressedFile);
+      if (uploadError) throw uploadError;
+
+      const { data } = supabase.storage.from('avatars').getPublicUrl(fileName);
+      setFormData({ ...formData, avatar_url: data.publicUrl });
+    } catch (error: any) {
+      alert("Error uploading image: " + error.message);
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
+  const handleBannerUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    try {
+      setUploadingBanner(true);
+      if (!e.target.files || e.target.files.length === 0) return;
+      
+      const file = e.target.files[0];
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
+
+      const options = {
+        maxSizeMB: 1,
+        maxWidthOrHeight: 1920,
+        useWebWorker: true,
+      };
+      const compressedFile = await imageCompression(file, options);
+
+      const { error: uploadError } = await supabase.storage.from('banners').upload(fileName, compressedFile);
+      if (uploadError) throw uploadError;
+
+      const { data } = supabase.storage.from('banners').getPublicUrl(fileName);
+      setFormData({ ...formData, banner_url: data.publicUrl });
+    } catch (error: any) {
+      alert("Error uploading banner: " + error.message);
+    } finally {
+      setUploadingBanner(false);
+    }
   };
 
   // --- PORTFOLIO LOGIC ---
@@ -238,6 +299,62 @@ export default function EditProfilePage() {
             
             {activeTab === "Basic Information" && (
               <div className="space-y-5 max-w-md">
+                
+                {/* Banner Photo Upload */}
+                <div className="mb-4">
+                  <label className="block text-sm font-bold mb-3">Profile Banner</label>
+                  <label className="relative block group cursor-pointer w-full aspect-[3/1] bg-slate-100 dark:bg-slate-800 rounded-xl border-2 border-border overflow-hidden transition-transform group-hover:scale-[1.02]">
+                    <div className="w-full h-full flex items-center justify-center">
+                      {uploadingBanner ? (
+                        <Loader2 className="w-6 h-6 text-indigo-500 animate-spin" />
+                      ) : formData.banner_url ? (
+                        <img src={formData.banner_url} alt="Banner" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="flex flex-col items-center text-slate-400">
+                          <Plus className="w-8 h-8 mb-2" />
+                          <span className="text-sm font-medium">Add Banner Image</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="absolute inset-0 bg-slate-900/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                      <span className="text-white font-bold text-sm bg-black/50 px-3 py-1.5 rounded-full">Change Banner</span>
+                    </div>
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      onChange={handleBannerUpload} 
+                      disabled={uploadingBanner}
+                      className="hidden" 
+                    />
+                  </label>
+                </div>
+
+                {/* Profile Photo Upload */}
+                <div className="mb-6">
+                  <label className="block text-sm font-bold mb-3">Profile Photo</label>
+                  <label className="relative inline-block group cursor-pointer">
+                    <div className="w-24 h-24 rounded-full bg-slate-100 dark:bg-slate-800 border-2 border-border flex items-center justify-center overflow-hidden transition-transform group-hover:scale-105">
+                      {uploadingAvatar ? (
+                        <Loader2 className="w-6 h-6 text-indigo-500 animate-spin" />
+                      ) : formData.avatar_url ? (
+                        <img src={formData.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
+                      ) : (
+                        <Plus className="w-8 h-8 text-slate-400" />
+                      )}
+                    </div>
+                    <div className="absolute inset-0 bg-slate-900/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Plus className="w-6 h-6 text-white" />
+                    </div>
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      onChange={handleAvatarUpload} 
+                      disabled={uploadingAvatar}
+                      className="hidden" 
+                    />
+                  </label>
+                </div>
+
                 <div>
                   <label className="block text-sm font-bold mb-1">Full Name</label>
                   <input type="text" value={formData.full_name || ''} onChange={e => setFormData({...formData, full_name: e.target.value})} className="w-full p-2.5 rounded-lg border border-border bg-transparent focus:outline-none focus:border-indigo-500" placeholder="John Doe" />

@@ -7,6 +7,9 @@ import { useRouter } from "next/navigation";
 export default function TalentOnboardingPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  
   const [formData, setFormData] = useState({
     full_name: "",
     username: "",
@@ -18,6 +21,31 @@ export default function TalentOnboardingPage() {
     portfolio_link: ""
   });
   const supabase = createClient();
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    try {
+      setUploadingAvatar(true);
+      if (!e.target.files || e.target.files.length === 0) {
+        throw new Error('You must select an image to upload.');
+      }
+      const file = e.target.files[0];
+      const fileExt = file.name.split('.').pop();
+      // Generate a random file name
+      const fileName = `${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
+
+      // Upload to 'avatars' bucket
+      const { error: uploadError } = await supabase.storage.from('avatars').upload(fileName, file);
+      if (uploadError) throw uploadError;
+
+      // Get public URL
+      const { data } = supabase.storage.from('avatars').getPublicUrl(fileName);
+      setAvatarUrl(data.publicUrl);
+    } catch (error: any) {
+      alert("Error uploading image: " + error.message);
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -36,6 +64,7 @@ export default function TalentOnboardingPage() {
         id: user.id,
         full_name: formData.full_name,
         username: formData.username,
+        avatar_url: avatarUrl || undefined,
         headline: formData.headline,
         bio: formData.bio,
         location: formData.location,
@@ -81,9 +110,15 @@ export default function TalentOnboardingPage() {
           
           {/* Profile Photo Upload */}
           <div className="flex flex-col items-center justify-center">
-            <div className="relative group cursor-pointer">
-              <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-full bg-indigo-50 border-4 border-white shadow-lg overflow-hidden flex items-center justify-center transition-transform group-hover:scale-105">
-                <User className="w-12 h-12 text-indigo-200" />
+            <label className="relative group cursor-pointer block">
+              <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-full bg-indigo-50 border-4 border-card shadow-lg overflow-hidden flex items-center justify-center transition-transform group-hover:scale-105">
+                {uploadingAvatar ? (
+                  <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
+                ) : avatarUrl ? (
+                  <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                ) : (
+                  <User className="w-12 h-12 text-indigo-200" />
+                )}
               </div>
               <div className="absolute inset-0 bg-slate-900/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                 <Camera className="w-8 h-8 text-white" />
@@ -91,7 +126,14 @@ export default function TalentOnboardingPage() {
               <div className="absolute bottom-0 right-0 bg-indigo-600 w-8 h-8 rounded-full border-2 border-white flex items-center justify-center shadow-sm">
                 <Camera className="w-4 h-4 text-white" />
               </div>
-            </div>
+              <input 
+                type="file" 
+                accept="image/*" 
+                onChange={handleAvatarUpload} 
+                disabled={uploadingAvatar}
+                className="hidden" 
+              />
+            </label>
             <p className="text-xs text-muted-foreground mt-4 font-medium">Upload Profile Photo</p>
           </div>
 
