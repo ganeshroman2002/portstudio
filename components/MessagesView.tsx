@@ -20,30 +20,40 @@ export default function MessagesView() {
       setCurrentUser(user);
 
       // Fetch conversations
-      const { data: convs } = await supabase
+      const { data: convs, error } = await supabase
         .from('conversations')
         .select(`
           id,
           updated_at,
-          participant1:profiles!conversations_participant1_id_fkey(id, full_name, avatar_url, account_type),
-          participant2:profiles!conversations_participant2_id_fkey(id, full_name, avatar_url, account_type)
+          participant1:profiles!participant1_id(id, full_name, avatar_url, account_type),
+          participant2:profiles!participant2_id(id, full_name, avatar_url, account_type)
         `)
         .or(`participant1_id.eq.${user.id},participant2_id.eq.${user.id}`)
         .order('updated_at', { ascending: false });
 
-      if (convs) setConversations(convs);
+      if (error) {
+        console.error("Error fetching conversations:", error);
+      }
+
+      if (convs && convs.length > 0) {
+        setConversations(convs);
+        // Automatically select the first conversation if none is selected
+        setActiveConversation(convs[0]);
+        fetchMessages(convs[0].id);
+      }
       setLoading(false);
     };
     init();
   }, [supabase]);
 
   const fetchMessages = async (conversationId: string) => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('messages')
       .select('*')
       .eq('conversation_id', conversationId)
       .order('created_at', { ascending: true });
     
+    if (error) console.error("Error fetching messages:", error);
     if (data) setMessages(data);
   };
 
