@@ -18,9 +18,20 @@ export default function HomeFeedPage() {
   const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
   const [messageText, setMessageText] = useState("");
   const [sendingMessage, setSendingMessage] = useState(false);
+
+  // Interview Modal State
+  const [showInterviewModal, setShowInterviewModal] = useState(false);
+  const [interviewDate, setInterviewDate] = useState("");
+  const [schedulingInterview, setSchedulingInterview] = useState(false);
   
   const handleSendMessage = async () => {
     if (!messageText.trim() || !selectedPitch || !userProfile || !userProfile.id) return;
+    
+    if (/(?:^|\s)@interview(?:\s|$)/i.test(messageText)) {
+      setShowInterviewModal(true);
+      return;
+    }
+    
     setSendingMessage(true);
     
     // 1. Find or create conversation
@@ -86,6 +97,68 @@ export default function HomeFeedPage() {
     setSendingMessage(false);
   };
 
+  const handleScheduleInterview = async () => {
+    if (!interviewDate || !selectedPitch || !userProfile || !userProfile.id) return;
+    setSchedulingInterview(true);
+    
+    // 1. Find or create conversation
+    let conversationId = null;
+    const { data: existingConv } = await supabase
+      .from('conversations')
+      .select('id')
+      .or(`and(participant1_id.eq.${userProfile.id},participant2_id.eq.${selectedPitch.profile_id}),and(participant1_id.eq.${selectedPitch.profile_id},participant2_id.eq.${userProfile.id})`)
+      .single();
+      
+    if (existingConv) {
+      conversationId = existingConv.id;
+    } else {
+      const { data: newConv } = await supabase
+        .from('conversations')
+        .insert({ participant1_id: userProfile.id, participant2_id: selectedPitch.profile_id })
+        .select()
+        .single();
+      if (newConv) conversationId = newConv.id;
+    }
+
+    if (conversationId) {
+      const dateObj = new Date(interviewDate);
+      
+      const { error: interviewError } = await supabase.from('interviews').insert({
+        company_id: userProfile.id,
+        talent_id: selectedPitch.profile_id,
+        conversation_id: conversationId,
+        interview_date: dateObj.toISOString(),
+        status: 'scheduled'
+      });
+      
+      if (!interviewError) {
+        const autoMsg = `🗓️ I have scheduled an interview with you for ${dateObj.toLocaleString()}. Please check your Schedule for details.`;
+        
+        await supabase.from('messages').insert({
+          conversation_id: conversationId,
+          sender_id: userProfile.id,
+          content: autoMsg
+        });
+        
+        await supabase.from('notifications').insert({
+          user_id: selectedPitch.profile_id,
+          sender_id: userProfile.id,
+          type: 'interview',
+          message: `${userProfile.full_name || 'A company'} scheduled an interview with you!`,
+          link: '/schedule'
+        });
+
+        alert("Interview scheduled successfully!");
+        setShowInterviewModal(false);
+        setInterviewDate("");
+        if (isMessageModalOpen) setIsMessageModalOpen(false);
+      } else {
+        alert("Failed to schedule interview: " + interviewError.message);
+      }
+    }
+    setSchedulingInterview(false);
+  };
+
   const fetchPitches = async () => {
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
@@ -122,6 +195,16 @@ export default function HomeFeedPage() {
     setViewMode(mode);
     localStorage.setItem('portstudio_view_mode', mode);
     window.dispatchEvent(new CustomEvent('viewModeChanged', { detail: mode }));
+  };
+
+  const handleShareProfile = (username: string | undefined) => {
+    if (!username) {
+      alert('User does not have a public profile yet.');
+      return;
+    }
+    const url = `${window.location.origin}/${username}`;
+    navigator.clipboard.writeText(url);
+    alert('Profile link copied to clipboard!');
   };
 
   return (
@@ -210,7 +293,10 @@ export default function HomeFeedPage() {
                               >
                                 View Pitch Details
                               </button>
-                              <button className="px-6 py-2 bg-background border border-border hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors rounded-2xl font-bold text-[14px]">
+                              <button 
+                                onClick={(e) => { e.stopPropagation(); handleShareProfile(p?.username); }}
+                                className="px-6 py-2 bg-background border border-border hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors rounded-2xl font-bold text-[14px]"
+                              >
                                 Share
                               </button>
                             </div>
@@ -294,7 +380,7 @@ export default function HomeFeedPage() {
                             >
                               View Pitch Details
                             </button>
-                            <button className="px-5 sm:px-6 py-2 sm:py-2.5 bg-transparent border border-border hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors rounded-xl sm:rounded-2xl font-bold text-[14px] sm:text-[15px]">
+                            <button onClick={(e) => { e.stopPropagation(); handleShareProfile(p?.username); }} className="px-5 sm:px-6 py-2 sm:py-2.5 bg-transparent border border-border hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors rounded-xl sm:rounded-2xl font-bold text-[14px] sm:text-[15px]">
                               Share
                             </button>
                           </div>
@@ -393,6 +479,29 @@ export default function HomeFeedPage() {
                   placeholder="Search"
                   className="w-full pl-12 pr-4 py-3 bg-slate-100 dark:bg-[#202327] border border-transparent rounded-full text-[15px] focus:bg-background focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors placeholder-muted-foreground"
                 />
+              </div>
+            </div>
+
+            {/* Company Stats Widget */}
+            <div className="bg-slate-50 dark:bg-[#16181c] rounded-2xl border border-border overflow-hidden mb-4">
+              <h2 className="px-4 pt-4 pb-3 text-[20px] font-extrabold border-b border-border">Company Overview</h2>
+              <div className="grid grid-cols-2 gap-px bg-border">
+                <div className="bg-slate-50 dark:bg-[#16181c] p-4 flex flex-col items-center justify-center transition-colors hover:bg-slate-100 dark:hover:bg-slate-800/50 cursor-default">
+                  <span className="text-2xl font-black text-indigo-500">3</span>
+                  <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider text-center mt-1 text-balance leading-tight">Active Jobs</span>
+                </div>
+                <div className="bg-slate-50 dark:bg-[#16181c] p-4 flex flex-col items-center justify-center transition-colors hover:bg-slate-100 dark:hover:bg-slate-800/50 cursor-default">
+                  <span className="text-2xl font-black">12</span>
+                  <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider text-center mt-1 text-balance leading-tight">Saved Profiles</span>
+                </div>
+                <div className="bg-slate-50 dark:bg-[#16181c] p-4 flex flex-col items-center justify-center transition-colors hover:bg-slate-100 dark:hover:bg-slate-800/50 cursor-default">
+                  <span className="text-2xl font-black text-green-500">4</span>
+                  <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider text-center mt-1 text-balance leading-tight">Interviews Scheduled</span>
+                </div>
+                <div className="bg-slate-50 dark:bg-[#16181c] p-4 flex flex-col items-center justify-center transition-colors hover:bg-slate-100 dark:hover:bg-slate-800/50 cursor-default">
+                  <span className="text-2xl font-black">892</span>
+                  <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider text-center mt-1 text-balance leading-tight">Profile Views</span>
+                </div>
               </div>
             </div>
 
@@ -546,7 +655,10 @@ export default function HomeFeedPage() {
               <div className="pb-24">
                 {true && (
                   <div className="flex flex-col gap-3 mt-6">
-                    <button className="w-full py-3 bg-indigo-500 hover:bg-indigo-600 text-white transition-colors rounded-xl font-bold text-[15px] shadow-lg shadow-indigo-500/20 flex items-center justify-center gap-2">
+                    <button 
+                      onClick={() => setShowInterviewModal(true)}
+                      className="w-full py-3 bg-indigo-500 hover:bg-indigo-600 text-white transition-colors rounded-xl font-bold text-[15px] shadow-lg shadow-indigo-500/20 flex items-center justify-center gap-2"
+                    >
                       Invite to Interview ⭐
                     </button>
                     
@@ -569,10 +681,16 @@ export default function HomeFeedPage() {
                     </div>
 
                     <div className="flex flex-col gap-3 mt-2">
-                      <button className="w-full py-2.5 bg-slate-200/50 hover:bg-slate-200 dark:bg-slate-800/50 dark:hover:bg-slate-800 text-muted-foreground transition-colors rounded-xl font-bold text-[14px] flex items-center justify-center gap-2 cursor-not-allowed">
-                        📅 Schedule Interview <span className="text-[10px] font-normal opacity-70">(Pending invite)</span>
+                      <button 
+                        onClick={() => setShowInterviewModal(true)}
+                        className="w-full py-2.5 bg-slate-200/50 hover:bg-slate-200 dark:bg-slate-800/50 dark:hover:bg-slate-800 text-muted-foreground transition-colors rounded-xl font-bold text-[14px] flex items-center justify-center gap-2"
+                      >
+                        📅 Schedule Interview
                       </button>
-                      <button className="w-full py-2.5 bg-transparent border border-border hover:bg-slate-100 dark:hover:bg-slate-800 text-foreground transition-colors rounded-xl font-bold text-[14px] flex items-center justify-center gap-2">
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); handleShareProfile(selectedPitch.profiles?.username || (Array.isArray(selectedPitch.profiles) ? selectedPitch.profiles[0]?.username : undefined)); }}
+                        className="w-full py-2.5 bg-transparent border border-border hover:bg-slate-100 dark:hover:bg-slate-800 text-foreground transition-colors rounded-xl font-bold text-[14px] flex items-center justify-center gap-2"
+                      >
                         📤 Share Profile
                       </button>
                     </div>
@@ -608,12 +726,39 @@ export default function HomeFeedPage() {
             <h3 className="text-xl font-bold mb-1">Message {selectedPitch.full_name}</h3>
             <p className="text-[13px] text-muted-foreground mb-4">Start a conversation about their pitch.</p>
             
-            <textarea
-              value={messageText}
-              onChange={(e) => setMessageText(e.target.value)}
-              placeholder="Hi there, we loved your pitch and would like to discuss..."
-              className="w-full h-32 p-3 bg-slate-100 dark:bg-[#202327] rounded-xl border border-transparent focus:border-indigo-500 focus:bg-background focus:ring-1 focus:ring-indigo-500 transition-colors resize-none text-[14px]"
-            />
+            <div className="relative">
+              {/(?:^|\s)@$/.test(messageText) && (
+                <div className="absolute bottom-full mb-2 left-0 w-56 bg-background border border-border rounded-xl shadow-lg p-1.5 flex flex-col z-20 animate-in fade-in slide-in-from-bottom-2">
+                  <button 
+                    type="button" 
+                    onClick={() => { setShowInterviewModal(true); setIsMessageModalOpen(false); setMessageText(""); }} 
+                    className="flex items-center gap-3 p-2.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors text-left w-full"
+                  >
+                    <div className="bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 p-1.5 rounded-md">
+                      <span className="font-bold">📅</span>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="font-bold text-[14px] leading-tight">Schedule Interview</span>
+                      <span className="text-[11px] text-muted-foreground leading-tight">Pick a time to meet</span>
+                    </div>
+                  </button>
+                </div>
+              )}
+              <textarea
+                value={messageText}
+                onChange={(e) => setMessageText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (/(?:^|\s)@$/.test(messageText) && (e.key === 'Enter' || e.key === 'Tab' || e.key === ' ')) {
+                    e.preventDefault();
+                    setShowInterviewModal(true);
+                    setIsMessageModalOpen(false);
+                    setMessageText("");
+                  }
+                }}
+                placeholder="Hi there, we loved your pitch... (Type @ for options)"
+                className="w-full h-32 p-3 bg-slate-100 dark:bg-[#202327] rounded-xl border border-transparent focus:border-indigo-500 focus:bg-background focus:ring-1 focus:ring-indigo-500 transition-colors resize-none text-[14px]"
+              />
+            </div>
             
             <div className="flex justify-end mt-4">
               <button

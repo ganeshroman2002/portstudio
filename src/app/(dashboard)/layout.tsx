@@ -2,14 +2,15 @@
 import React, { useState, useEffect } from "react";
 import { 
   Home, Search, Bell, Mail, Star, User, MoreHorizontal, 
-  Settings, Sparkles, Plus
+  Settings, Sparkles, Plus, Calendar
 } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/client";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const isPublishPage = pathname === '/publish';
   const [profile, setProfile] = useState<any>(null);
   const [suggestedUsers, setSuggestedUsers] = useState<any[]>([]);
@@ -21,11 +22,56 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       if (user) {
         // Fetch the user's detailed profile from the newly created profiles table
         const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-        if (data) setProfile(data);
+        
+        const isCompany = user.user_metadata?.role === 'company' || data?.account_type === 'company';
+        if (isCompany) {
+          router.push('/company');
+          return;
+        }
+
+        if (data) {
+          setProfile(data);
+        }
 
         // Fetch suggested users (excluding current user)
-        const { data: users } = await supabase.from('profiles').select('*').neq('id', user.id).limit(3);
-        if (users) setSuggestedUsers(users);
+        const { data: allUsers } = await supabase.from('profiles').select('*').neq('id', user.id).limit(50);
+        
+        if (allUsers && allUsers.length > 0) {
+          // Shuffle all users first
+          const shuffledUsers = [...allUsers].sort(() => 0.5 - Math.random());
+          
+          let selectedUsers = [];
+          
+          if (data?.skills && data.skills.length > 0) {
+            // Score users based on skill overlap
+            const scoredUsers = shuffledUsers.map(u => {
+              const overlap = (u.skills || []).filter((s: string) => data.skills.includes(s)).length;
+              return { user: u, score: overlap };
+            });
+            
+            // Sort by score descending
+            scoredUsers.sort((a, b) => b.score - a.score);
+            
+            // Pick top 2 matching (60%)
+            const topMatches = scoredUsers.filter(u => u.score > 0).slice(0, 2).map(u => u.user);
+            
+            // If we didn't find 2 matches, we'll just fill the rest randomly
+            const matchesCount = topMatches.length;
+            const remainingNeeded = 3 - matchesCount;
+            
+            // Pick random users from those NOT in topMatches
+            const remainingUsers = shuffledUsers.filter(u => !topMatches.find(tm => tm.id === u.id));
+            const randomPicks = remainingUsers.slice(0, remainingNeeded);
+            
+            selectedUsers = [...topMatches, ...randomPicks];
+          } else {
+            // If current user has no skills, just pick 3 random
+            selectedUsers = shuffledUsers.slice(0, 3);
+          }
+          
+          // Shuffle final selection so matches aren't always at the top
+          setSuggestedUsers(selectedUsers.sort(() => 0.5 - Math.random()));
+        }
       }
     };
     fetchProfile();
@@ -54,6 +100,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 { icon: Home, label: "Home", href: "/" },
                 { icon: Bell, label: "Notifications", href: "/notifications" },
                 { icon: Mail, label: "Messages", href: "/messages" },
+                { icon: Calendar, label: "Schedule", href: "/schedule" },
                 { icon: Star, label: "Premium", href: "/premium" },
                 { icon: User, label: "Profile", href: "/profile" },
                 { icon: Settings, label: "Settings", href: "/settings" },

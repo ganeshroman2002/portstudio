@@ -1,7 +1,7 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { createClient } from "@/lib/client";
-import { Loader2, Send, User } from "lucide-react";
+import { Loader2, Send, User, Paperclip, X, FileText, Image as ImageIcon, Calendar } from "lucide-react";
 
 export default function MessagesView() {
   const supabase = createClient();
@@ -12,12 +12,28 @@ export default function MessagesView() {
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [sending, setSending] = useState(false);
+  const [attachment, setAttachment] = useState<File | null>(null);
+  
+  // Interview Scheduling State
+  const [showInterviewModal, setShowInterviewModal] = useState(false);
+  const [interviewDate, setInterviewDate] = useState("");
+  const [schedulingInterview, setSchedulingInterview] = useState(false);
+  
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to bottom of messages
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
   useEffect(() => {
     const init = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-      setCurrentUser(user);
+      
+      const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+      setCurrentUser({ ...user, profile });
 
       // Fetch conversations without trying to join profiles yet
       const { data: convs, error } = await supabase
@@ -91,21 +107,129 @@ export default function MessagesView() {
     fetchMessages(conv.id);
   };
 
-  const handleSendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newMessage.trim() || !activeConversation || !currentUser) return;
-    setSending(true);
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setAttachment(e.target.files[0]);
+    }
+  };
 
-    const { data: msg } = await supabase.from('messages').insert({
+  const handleScheduleInterview = async () => {
+    if (!interviewDate || !activeConversation || !currentUser) return;
+    setSchedulingInterview(true);
+    
+    const otherParticipant = getOtherParticipant(activeConversation);
+    const dateObj = new Date(interviewDate);
+    
+    const { data: interview, error: interviewError } = await supabase.from('interviews').insert({
+      company_id: currentUser.id, // Assuming current user is the company scheduling it
+      talent_id: otherParticipant.id,
+      conversation_id: activeConversation.id,
+      interview_date: dateObj.toISOString(),
+      status: 'scheduled'
+    }).select().single();
+    
+    if (interviewError) {
+      alert("Failed to schedule interview. Did you run the SQL script? " + interviewError.message);
+      setSchedulingInterview(false);
+      return;
+    }
+    
+    // Now send the automated message
+    const autoMsg = `🗓️ I have scheduled an interview with you for ${dateObj.toLocaleString()}. Please check your Schedule for details.`;
+    
+    const newMsgObj = {
+      id: crypto.randomUUID(),
       conversation_id: activeConversation.id,
       sender_id: currentUser.id,
-      content: newMessage
-    }).select().single();
+      content: autoMsg,
+      attachment_url: null,
+      attachment_name: null,
+      created_at: new Date().toISOString()
+    };
 
-    if (msg) {
-      setMessages([...messages, msg]);
-      setNewMessage("");
+    setMessages([...messages, newMsgObj]);
+    setNewMessage("");
+    setShowInterviewModal(false);
+    setInterviewDate("");
+    
+    await supabase.from('messages').insert({
+      conversation_id: activeConversation.id,
+      sender_id: currentUser.id,
+      content: autoMsg
+    });
+    
+    await supabase.from('conversations').update({ updated_at: new Date().toISOString() }).eq('id', activeConversation.id);
+    
+    await supabase.from('notifications').insert({
+      user_id: otherParticipant.id,
+      sender_id: currentUser.id,
+      type: 'interview',
+      message: `${currentUser.profile?.full_name || 'A company'} scheduled an interview with you!`,
+      link: '/schedule'
+    });
+    
+    setSchedulingInterview(false);
+  };
+
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if ((!newMessage.trim() && !attachment) || !activeConversation || !currentUser) return;
+    
+    if (/(?:^|\s)@interview(?:\s|$)/i.test(newMessage)) {
+      setShowInterviewModal(true);
+      return;
+    }
+    
+    setSending(true);
+
+    let attachmentUrl = null;
+    let attachmentName = null;
+
+    if (attachment) {
+      const ext = attachment.name.split('.').pop();
+      const fileName = `${Date.now()}.${ext}`;
+      const { error: uploadError } = await supabase.storage.from('message_attachments').upload(fileName, attachment);
       
+      if (uploadError) {
+        alert("Failed to upload attachment: " + uploadError.message);
+        setSending(false);
+        return;
+      }
+      
+      const { data } = supabase.storage.from('message_attachments').getPublicUrl(fileName);
+      attachmentUrl = data.publicUrl;
+      attachmentName = attachment.name;
+    }
+
+    const newMsgObj = {
+      id: crypto.randomUUID(),
+      conversation_id: activeConversation.id,
+      sender_id: currentUser.id,
+      content: newMessage.trim(),
+      attachment_url: attachmentUrl,
+      attachment_name: attachmentName,
+      created_at: new Date().toISOString()
+    };
+
+    // Optimistically update UI
+    setMessages([...messages, newMsgObj]);
+    setNewMessage("");
+    setAttachment(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+
+    const { error: msgError } = await supabase.from('messages').insert({
+      conversation_id: activeConversation.id,
+      sender_id: currentUser.id,
+      content: newMessage.trim(),
+      attachment_url: attachmentUrl,
+      attachment_name: attachmentName
+    });
+
+    if (msgError) {
+      alert("Failed to send message: " + msgError.message);
+      // Revert optimistic update
+      setMessages(messages);
+    } else {
       // Update conversation updated_at
       await supabase.from('conversations').update({ updated_at: new Date().toISOString() }).eq('id', activeConversation.id);
       
@@ -127,6 +251,10 @@ export default function MessagesView() {
 
   const getOtherParticipant = (conv: any) => {
     return conv.participant1.id === currentUser?.id ? conv.participant2 : conv.participant1;
+  };
+
+  const isImage = (url: string) => {
+    return url.match(/\.(jpeg|jpg|gif|png|webp)(\?.*)?$/i);
   };
 
   if (loading) {
@@ -166,7 +294,6 @@ export default function MessagesView() {
                   )}
                   <div className="flex-1 min-w-0">
                     <h4 className="font-bold text-[15px] truncate">{other.full_name || 'User'}</h4>
-                    <p className="text-[13px] text-muted-foreground truncate capitalize">{other.account_type}</p>
                   </div>
                 </div>
               );
@@ -188,26 +315,97 @@ export default function MessagesView() {
                 const isMe = msg.sender_id === currentUser.id;
                 return (
                   <div key={i} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[70%] rounded-2xl px-4 py-2 ${isMe ? 'bg-indigo-500 text-white rounded-br-sm' : 'bg-slate-100 dark:bg-[#1e2128] text-foreground border border-border rounded-bl-sm'}`}>
-                      <p className="text-[15px] whitespace-pre-wrap">{msg.content}</p>
+                    <div className={`max-w-[70%] rounded-2xl flex flex-col overflow-hidden ${isMe ? 'bg-indigo-500 text-white rounded-br-sm' : 'bg-slate-100 dark:bg-[#1e2128] text-foreground border border-border rounded-bl-sm'}`}>
+                      {msg.attachment_url && (
+                        <div className={`p-2 ${msg.content ? 'border-b border-white/20' : ''}`}>
+                          {isImage(msg.attachment_url) ? (
+                            <a href={msg.attachment_url} target="_blank" rel="noopener noreferrer" className="block max-w-sm rounded-xl overflow-hidden">
+                              <img src={msg.attachment_url} alt="Attachment" className="w-full h-auto object-cover hover:opacity-90 transition-opacity" />
+                            </a>
+                          ) : (
+                            <a href={msg.attachment_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-black/10 hover:bg-black/20 rounded-xl transition-colors">
+                              <div className="w-10 h-10 rounded-full bg-white text-indigo-500 flex items-center justify-center shrink-0">
+                                <FileText className="w-5 h-5" />
+                              </div>
+                              <span className="text-sm font-medium truncate flex-1">{msg.attachment_name || 'Document'}</span>
+                            </a>
+                          )}
+                        </div>
+                      )}
+                      {msg.content && (
+                        <div className="px-4 py-2">
+                          <p className="text-[15px] whitespace-pre-wrap">{msg.content}</p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
               })}
+              <div ref={messagesEndRef} />
             </div>
             
-            <div className="p-4 border-t border-border bg-background">
-              <form onSubmit={handleSendMessage} className="flex gap-2 relative">
+            <div className="p-4 border-t border-border bg-background flex flex-col gap-2 relative">
+              {attachment && (
+                <div className="flex items-center gap-2 p-2 bg-slate-100 dark:bg-[#1e2128] rounded-xl self-start max-w-sm">
+                  {attachment.type.startsWith('image/') ? <ImageIcon className="w-5 h-5 text-indigo-500" /> : <FileText className="w-5 h-5 text-indigo-500" />}
+                  <span className="text-sm truncate max-w-[200px]">{attachment.name}</span>
+                  <button onClick={() => setAttachment(null)} className="p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full text-muted-foreground">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+              
+              {/* @ Command Autocomplete */}
+              {/(?:^|\s)@$/.test(newMessage) && (
+                <div className="absolute bottom-[4.5rem] left-16 w-56 bg-background border border-border rounded-xl shadow-lg p-1.5 flex flex-col z-20 animate-in fade-in slide-in-from-bottom-2">
+                  <button 
+                    type="button" 
+                    onClick={() => { setShowInterviewModal(true); setNewMessage(""); }} 
+                    className="flex items-center gap-3 p-2.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors text-left w-full"
+                  >
+                    <div className="bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 p-1.5 rounded-md">
+                      <Calendar className="w-4 h-4" />
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="font-bold text-[14px] leading-tight">Schedule Interview</span>
+                      <span className="text-[11px] text-muted-foreground leading-tight">Pick a time to meet</span>
+                    </div>
+                  </button>
+                </div>
+              )}
+
+              <form onSubmit={handleSendMessage} className="flex gap-2 items-end">
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
+                <button 
+                  type="button" 
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-12 h-12 bg-slate-100 dark:bg-[#202327] hover:bg-slate-200 dark:hover:bg-slate-800 rounded-full flex items-center justify-center shrink-0 transition-colors text-muted-foreground"
+                >
+                  <Paperclip className="w-5 h-5" />
+                </button>
+                
                 <input
                   type="text"
                   value={newMessage}
                   onChange={(e) => setNewMessage(e.target.value)}
-                  placeholder="Type a message..."
-                  className="flex-1 bg-slate-100 dark:bg-[#202327] border border-transparent rounded-full px-5 py-3 focus:outline-none focus:bg-background focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-[15px]"
+                  onKeyDown={(e) => {
+                    if (/(?:^|\s)@$/.test(newMessage) && (e.key === 'Enter' || e.key === 'Tab' || e.key === ' ')) {
+                      e.preventDefault();
+                      setShowInterviewModal(true);
+                      setNewMessage("");
+                    }
+                  }}
+                  placeholder="Type a message... (Type @ for options)"
+                  className="flex-1 h-12 bg-slate-100 dark:bg-[#202327] border border-transparent rounded-full px-5 focus:outline-none focus:bg-background focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-[15px]"
                 />
                 <button 
                   type="submit" 
-                  disabled={!newMessage.trim() || sending}
+                  disabled={(!newMessage.trim() && !attachment) || sending}
                   className="w-12 h-12 bg-indigo-500 hover:bg-indigo-600 text-white rounded-full flex items-center justify-center shrink-0 disabled:opacity-50 transition-colors"
                 >
                   {sending ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5 -ml-1" />}
@@ -224,6 +422,58 @@ export default function MessagesView() {
           </div>
         )}
       </div>
+
+      {/* Interview Scheduling Modal */}
+      {showInterviewModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-background rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl relative border border-border">
+            <button 
+              onClick={() => setShowInterviewModal(false)}
+              className="absolute top-4 right-4 p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            
+            <div className="flex items-center gap-4 mb-6">
+              <div className="w-12 h-12 bg-indigo-100 text-indigo-600 rounded-2xl flex items-center justify-center shrink-0">
+                <Calendar className="w-6 h-6" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold">Schedule Interview</h2>
+                <p className="text-muted-foreground text-sm">Pick a date and time to meet.</p>
+              </div>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-bold mb-2">Select Date & Time</label>
+                <input 
+                  type="datetime-local" 
+                  value={interviewDate}
+                  onChange={(e) => setInterviewDate(e.target.value)}
+                  className="w-full bg-slate-100 dark:bg-slate-800/50 border-none rounded-xl p-4 focus:ring-2 focus:ring-indigo-500 font-medium"
+                />
+              </div>
+              
+              <div className="pt-4 flex gap-3">
+                <button 
+                  onClick={() => setShowInterviewModal(false)}
+                  className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 transition-colors rounded-xl font-bold text-sm"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={handleScheduleInterview}
+                  disabled={!interviewDate || schedulingInterview}
+                  className="flex-1 py-3 bg-indigo-500 hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed text-white transition-colors rounded-xl font-bold text-sm flex items-center justify-center"
+                >
+                  {schedulingInterview ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Schedule'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

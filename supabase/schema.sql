@@ -17,6 +17,7 @@ create table public.profiles (
   location text,
   languages text[],
   availability text,
+  notifications_enabled boolean default true,
   
   -- Professional
   primary_category text,
@@ -285,6 +286,8 @@ create table public.messages (
   conversation_id uuid references public.conversations(id) on delete cascade not null,
   sender_id uuid references public.profiles(id) on delete cascade not null,
   content text not null,
+  attachment_url text,
+  attachment_name text,
   read_at timestamp with time zone,
   created_at timestamp with time zone default timezone('utc'::text, now())
 );
@@ -330,3 +333,27 @@ create policy "Users can update read status" on public.messages for update using
 create policy "Users can view their notifications" on public.notifications for select using (auth.uid() = user_id);
 create policy "Users can update their notifications" on public.notifications for update using (auth.uid() = user_id);
 create policy "Anyone can insert notifications" on public.notifications for insert with check (true);
+
+-- Message Attachments Bucket
+insert into storage.buckets (id, name, public) values ('message_attachments', 'message_attachments', true);
+create policy "Anyone can read attachments" on storage.objects for select using ( bucket_id = 'message_attachments' );
+create policy "Authenticated users can insert attachments" on storage.objects for insert with check ( bucket_id = 'message_attachments' and auth.role() = 'authenticated' );
+
+-- 11. INTERVIEWS
+create table public.interviews (
+  id uuid default gen_random_uuid() primary key,
+  company_id uuid references public.profiles(id) on delete cascade not null,
+  talent_id uuid references public.profiles(id) on delete cascade not null,
+  conversation_id uuid references public.conversations(id) on delete cascade,
+  interview_date timestamp with time zone not null,
+  status text default 'scheduled' check (status in ('scheduled', 'completed', 'cancelled')),
+  notes text,
+  created_at timestamp with time zone default timezone('utc'::text, now())
+);
+
+-- Note: In this dev environment we disabled RLS for these tables previously to prevent friction. 
+-- For production, proper RLS policies should be applied here.
+
+-- Premium/Subscription Fields
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS subscription_tier text default 'free';
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS available_pitches integer default 3;

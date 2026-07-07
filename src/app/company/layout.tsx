@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/client";
 import { Loader2 } from "lucide-react";
 import Link from "next/link";
-import { Home, Search, Bell, Mail, Settings } from "lucide-react";
+import { Home, Search, Bell, Mail, Settings, Calendar } from "lucide-react";
 
 export default function CompanyLayout({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
@@ -66,6 +66,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
             { icon: Search, label: "Discover Talent", href: "/company/discover", active: false },
             { icon: Bell, label: "Notifications", href: "/company/notifications", active: false },
             { icon: Mail, label: "Messages", href: "/company/messages", active: false },
+            { icon: Calendar, label: "Schedule", href: "/company/schedule", active: false },
             { icon: Settings, label: "Settings", href: "/company/settings", active: false },
           ].map((item, i) => (
             <Link key={i} href={item.href} className={`flex items-center justify-center lg:justify-start gap-4 p-3 lg:px-4 lg:py-3 rounded-full transition-colors group ${item.active ? 'font-bold' : 'hover:bg-slate-200/20 dark:hover:bg-slate-800/50'}`}>

@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import { useTheme } from "next-themes";
-import { Moon, Sun, ArrowLeft, LogOut } from "lucide-react";
+import { Moon, Sun, ArrowLeft, LogOut, Bell } from "lucide-react";
 import Link from "next/link";
 import { createClient } from "@/lib/client";
 
@@ -9,18 +9,55 @@ export default function SettingsPage() {
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [pitchesCount, setPitchesCount] = useState(0);
+  const [userProfile, setUserProfile] = useState<any>(null);
+  const [saving, setSaving] = useState(false);
   const supabase = createClient();
 
   useEffect(() => {
     setMounted(true);
     const savedMode = localStorage.getItem('portstudio_view_mode') as 'grid' | 'list';
     if (savedMode) setViewMode(savedMode);
-  }, []);
+
+    const fetchProfileData = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+        if (data) {
+          setUserProfile(data);
+          setNotificationsEnabled(data.notifications_enabled !== false);
+        }
+        
+        // Fetch how many pitches the user has actually posted
+        const { count } = await supabase
+          .from('talent_pitches')
+          .select('*', { count: 'exact', head: true })
+          .eq('profile_id', user.id);
+          
+        setPitchesCount(count || 0);
+      }
+    };
+    fetchProfileData();
+  }, [supabase]);
 
   const handleSetViewMode = (mode: 'grid' | 'list') => {
     setViewMode(mode);
     localStorage.setItem('portstudio_view_mode', mode);
     window.dispatchEvent(new CustomEvent('viewModeChanged', { detail: mode }));
+  };
+
+  const toggleNotifications = async () => {
+    if (!userProfile) return;
+    setSaving(true);
+    const newValue = !notificationsEnabled;
+    setNotificationsEnabled(newValue);
+    const { error } = await supabase.from('profiles').update({ notifications_enabled: newValue }).eq('id', userProfile.id);
+    if (error) {
+      alert("Failed to update settings: " + error.message);
+      setNotificationsEnabled(!newValue);
+    }
+    setSaving(false);
   };
 
   const handleLogout = async () => {
@@ -83,6 +120,30 @@ export default function SettingsPage() {
           </div>
         </div>
 
+        <h3 className="text-xl font-extrabold mb-4 mt-8">Notifications</h3>
+        
+        <div className="bg-slate-50 dark:bg-slate-900 rounded-2xl border border-border p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-xl flex items-center justify-center shrink-0">
+                <Bell className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="font-bold text-[15px]">Push Notifications</p>
+                <p className="text-[14px] text-muted-foreground">Receive alerts for messages and interviews.</p>
+              </div>
+            </div>
+            
+            <button 
+              onClick={toggleNotifications}
+              disabled={saving}
+              className={`w-14 h-8 rounded-full transition-colors relative flex items-center px-1 ${notificationsEnabled ? 'bg-indigo-500' : 'bg-slate-200 dark:bg-slate-700'}`}
+            >
+              <div className={`w-6 h-6 bg-white rounded-full transition-transform shadow-sm ${notificationsEnabled ? 'translate-x-6' : 'translate-x-0'}`} />
+            </button>
+          </div>
+        </div>
+
         <h3 className="text-xl font-extrabold mb-4 mt-8">Subscription</h3>
         
         <div className="bg-slate-50 dark:bg-slate-900 rounded-2xl border border-border p-4">
@@ -98,12 +159,13 @@ export default function SettingsPage() {
             </div>
             <div className="pt-3 border-t border-border">
               <div className="flex justify-between text-[13px] mb-1">
-                <span className="font-bold">Pitch Limit</span>
-                <span className="text-muted-foreground">Max 3 allowed</span>
+                <span className="font-bold">Pitches Available</span>
+                <span className="text-muted-foreground">{Math.max(0, (userProfile?.available_pitches ?? 3) - pitchesCount)} Left</span>
               </div>
               <div className="w-full bg-slate-200 dark:bg-slate-800 rounded-full h-2">
-                <div className="bg-indigo-500 h-2 rounded-full" style={{ width: '33%' }}></div>
+                <div className="bg-indigo-500 h-2 rounded-full" style={{ width: `${Math.min(100, (Math.max(0, (userProfile?.available_pitches ?? 3) - pitchesCount) / 10) * 100)}%` }}></div>
               </div>
+              <p className="text-[12px] text-muted-foreground mt-2 text-right">Need more? Buy a Pitch Booster.</p>
             </div>
           </div>
         </div>

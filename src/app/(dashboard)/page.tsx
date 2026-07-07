@@ -52,6 +52,16 @@ export default function HomeFeedPage() {
     window.dispatchEvent(new CustomEvent('viewModeChanged', { detail: mode }));
   };
 
+  const handleShareProfile = (username: string | undefined) => {
+    if (!username) {
+      alert('User does not have a public profile yet.');
+      return;
+    }
+    const url = `${window.location.origin}/${username}`;
+    navigator.clipboard.writeText(url);
+    alert('Profile link copied to clipboard!');
+  };
+
   return (
     <div className="flex w-full h-full relative">
       {/* Center Column (Feed or Pitch Main Content) */}
@@ -138,7 +148,10 @@ export default function HomeFeedPage() {
                               >
                                 View Pitch Details
                               </button>
-                              <button className="px-6 py-2 bg-background border border-border hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors rounded-2xl font-bold text-[14px]">
+                              <button 
+                                onClick={(e) => { e.stopPropagation(); handleShareProfile(p?.username); }}
+                                className="px-6 py-2 bg-background border border-border hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors rounded-2xl font-bold text-[14px]"
+                              >
                                 Share
                               </button>
                             </div>
@@ -222,7 +235,7 @@ export default function HomeFeedPage() {
                             >
                               View Pitch Details
                             </button>
-                            <button className="px-5 sm:px-6 py-2 sm:py-2.5 bg-transparent border border-border hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors rounded-xl sm:rounded-2xl font-bold text-[14px] sm:text-[15px]">
+                            <button onClick={(e) => { e.stopPropagation(); handleShareProfile(p?.username); }} className="px-5 sm:px-6 py-2 sm:py-2.5 bg-transparent border border-border hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors rounded-xl sm:rounded-2xl font-bold text-[14px] sm:text-[15px]">
                               Share
                             </button>
                           </div>
@@ -497,9 +510,12 @@ export default function HomeFeedPage() {
                       <button className="w-full py-2.5 bg-slate-200/50 hover:bg-slate-200 dark:bg-slate-800/50 dark:hover:bg-slate-800 text-muted-foreground transition-colors rounded-xl font-bold text-[14px] flex items-center justify-center gap-2 cursor-not-allowed">
                         📅 Schedule Interview <span className="text-[10px] font-normal opacity-70">(Pending invite)</span>
                       </button>
-                      <button className="w-full py-2.5 bg-transparent border border-border hover:bg-slate-100 dark:hover:bg-slate-800 text-foreground transition-colors rounded-xl font-bold text-[14px] flex items-center justify-center gap-2">
-                        📤 Share Profile
-                      </button>
+                        <button 
+                          onClick={() => handleShareProfile(selectedPitch.profiles?.username || (Array.isArray(selectedPitch.profiles) ? selectedPitch.profiles[0]?.username : undefined))}
+                          className="w-full flex items-center gap-3 p-3 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-xl transition-colors font-medium"
+                        >
+                          📤 Share Profile
+                        </button>
                     </div>
                   </div>
                 )}
