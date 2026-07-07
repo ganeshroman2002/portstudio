@@ -19,15 +19,10 @@ export default function MessagesView() {
       if (!user) return;
       setCurrentUser(user);
 
-      // Fetch conversations
+      // Fetch conversations without trying to join profiles yet
       const { data: convs, error } = await supabase
         .from('conversations')
-        .select(`
-          id,
-          updated_at,
-          participant1:profiles!participant1_id(id, full_name, avatar_url, account_type),
-          participant2:profiles!participant2_id(id, full_name, avatar_url, account_type)
-        `)
+        .select('*')
         .or(`participant1_id.eq.${user.id},participant2_id.eq.${user.id}`)
         .order('updated_at', { ascending: false });
 
@@ -36,10 +31,44 @@ export default function MessagesView() {
       }
 
       if (convs && convs.length > 0) {
-        setConversations(convs);
+        // Collect all unique profile IDs we need to fetch
+        const profileIds = new Set<string>();
+        convs.forEach(c => {
+          if (c.participant1_id) profileIds.add(c.participant1_id);
+          if (c.participant2_id) profileIds.add(c.participant2_id);
+        });
+
+        const idArray = Array.from(profileIds);
+        let profiles: any[] = [];
+        
+        if (idArray.length > 0) {
+          const { data, error: profileError } = await supabase
+            .from('profiles')
+            .select('id, full_name, avatar_url')
+            .in('id', idArray);
+            
+          if (profileError) {
+            console.error("Error fetching profiles:", profileError.message || profileError);
+          }
+          if (data) profiles = data;
+        }
+
+        const profileMap = new Map();
+        if (profiles) {
+          profiles.forEach(p => profileMap.set(p.id, p));
+        }
+
+        // Stitch them together
+        const enrichedConvs = convs.map(c => ({
+          ...c,
+          participant1: profileMap.get(c.participant1_id) || { id: c.participant1_id, full_name: 'Unknown User' },
+          participant2: profileMap.get(c.participant2_id) || { id: c.participant2_id, full_name: 'Unknown User' },
+        }));
+
+        setConversations(enrichedConvs);
         // Automatically select the first conversation if none is selected
-        setActiveConversation(convs[0]);
-        fetchMessages(convs[0].id);
+        setActiveConversation(enrichedConvs[0]);
+        fetchMessages(enrichedConvs[0].id);
       }
       setLoading(false);
     };

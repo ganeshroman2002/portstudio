@@ -20,7 +20,7 @@ export default function HomeFeedPage() {
   const [sendingMessage, setSendingMessage] = useState(false);
   
   const handleSendMessage = async () => {
-    if (!messageText.trim() || !selectedPitch || !userProfile) return;
+    if (!messageText.trim() || !selectedPitch || !userProfile || !userProfile.id) return;
     setSendingMessage(true);
     
     // 1. Find or create conversation
@@ -57,10 +57,12 @@ export default function HomeFeedPage() {
     }
     
     if (conversationId) {
-      // 2. Insert message
+      // 2. Insert message using fresh auth user to guarantee RLS pass
+      const { data: { user } } = await supabase.auth.getUser();
+      
       const { error: msgError } = await supabase.from('messages').insert({
         conversation_id: conversationId,
-        sender_id: userProfile.id,
+        sender_id: user?.id,
         content: messageText
       });
       
@@ -70,7 +72,7 @@ export default function HomeFeedPage() {
         // 3. Send Notification to talent
         await supabase.from('notifications').insert({
           user_id: selectedPitch.profile_id,
-          sender_id: userProfile.id,
+          sender_id: user?.id,
           type: 'message',
           message: `${userProfile.full_name || 'A company'} sent you a new message.`,
           link: '/messages'
@@ -89,7 +91,7 @@ export default function HomeFeedPage() {
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
       const { data: p } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-      setUserProfile({ ...p, role: user.user_metadata?.role || p?.account_type });
+      setUserProfile({ id: user.id, ...p, role: user.user_metadata?.role || p?.account_type });
       
       const { data: users } = await supabase.from('profiles').select('*').neq('id', user.id).limit(3);
       if (users) setSuggestedUsers(users);
