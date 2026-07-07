@@ -26,6 +26,19 @@ export async function GET(request: Request) {
           }
           return NextResponse.redirect(`${origin}/onboarding`)
         }
+        
+        // Returning user check
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('account_type')
+          .eq('id', user.id)
+          .single();
+          
+        const isCompany = user.user_metadata?.role === 'company' || profile?.account_type === 'company';
+          
+        if (isCompany) {
+          return NextResponse.redirect(`${origin}/company`)
+        }
       }
 
       return NextResponse.redirect(`${origin}${next}`)

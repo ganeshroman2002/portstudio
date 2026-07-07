@@ -78,7 +78,7 @@ export default function TalentOnboardingPage() {
         const { error: socialError } = await supabase.from('social_links').upsert({
           profile_id: user.id,
           portfolio: formData.portfolio_link
-        });
+        }, { onConflict: 'profile_id' });
         if (socialError) throw socialError;
       }
 

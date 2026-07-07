@@ -13,6 +13,76 @@ export default function HomeFeedPage() {
   const [suggestedUsers, setSuggestedUsers] = useState<any[]>([]);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [zoomedImage, setZoomedImage] = useState<string | null>(null);
+  
+  // Messaging Modal State
+  const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
+  const [messageText, setMessageText] = useState("");
+  const [sendingMessage, setSendingMessage] = useState(false);
+  
+  const handleSendMessage = async () => {
+    if (!messageText.trim() || !selectedPitch || !userProfile) return;
+    setSendingMessage(true);
+    
+    // 1. Find or create conversation
+    let conversationId = null;
+    
+    const { data: existingConv, error: fetchError } = await supabase
+      .from('conversations')
+      .select('id')
+      .or(`and(participant1_id.eq.${userProfile.id},participant2_id.eq.${selectedPitch.profile_id}),and(participant1_id.eq.${selectedPitch.profile_id},participant2_id.eq.${userProfile.id})`)
+      .single();
+      
+    if (fetchError && fetchError.code !== 'PGRST116') {
+      console.error(fetchError);
+      alert(`Database error. Did you run the SQL script? ${fetchError.message}`);
+      setSendingMessage(false);
+      return;
+    }
+      
+    if (existingConv) {
+      conversationId = existingConv.id;
+    } else {
+      const { data: newConv, error: newConvError } = await supabase
+        .from('conversations')
+        .insert({ participant1_id: userProfile.id, participant2_id: selectedPitch.profile_id })
+        .select()
+        .single();
+        
+      if (newConvError) {
+        alert(`Failed to create conversation. Did you run the SQL script? ${newConvError.message}`);
+        setSendingMessage(false);
+        return;
+      }
+      if (newConv) conversationId = newConv.id;
+    }
+    
+    if (conversationId) {
+      // 2. Insert message
+      const { error: msgError } = await supabase.from('messages').insert({
+        conversation_id: conversationId,
+        sender_id: userProfile.id,
+        content: messageText
+      });
+      
+      if (msgError) {
+        alert(`Failed to send message: ${msgError.message}`);
+      } else {
+        // 3. Send Notification to talent
+        await supabase.from('notifications').insert({
+          user_id: selectedPitch.profile_id,
+          sender_id: userProfile.id,
+          type: 'message',
+          message: `${userProfile.full_name || 'A company'} sent you a new message.`,
+          link: '/messages'
+        });
+        
+        setMessageText("");
+        setIsMessageModalOpen(false);
+        alert("Message sent successfully!");
+      }
+    }
+    setSendingMessage(false);
+  };
 
   const fetchPitches = async () => {
     setLoading(true);
@@ -472,14 +542,17 @@ export default function HomeFeedPage() {
               )}
 
               <div className="pb-24">
-                {userProfile?.role === 'company' && (
+                {true && (
                   <div className="flex flex-col gap-3 mt-6">
                     <button className="w-full py-3 bg-indigo-500 hover:bg-indigo-600 text-white transition-colors rounded-xl font-bold text-[15px] shadow-lg shadow-indigo-500/20 flex items-center justify-center gap-2">
                       Invite to Interview ⭐
                     </button>
                     
                     <div className="grid grid-cols-2 gap-3">
-                      <button className="py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-[#1e2128] dark:hover:bg-slate-800 border border-border text-foreground transition-colors rounded-xl font-bold text-[13px] flex items-center justify-center gap-2">
+                      <button 
+                        onClick={() => setIsMessageModalOpen(true)}
+                        className="py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-[#1e2128] dark:hover:bg-slate-800 border border-border text-foreground transition-colors rounded-xl font-bold text-[13px] flex items-center justify-center gap-2"
+                      >
                         💬 Message
                       </button>
                       <button className="py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-[#1e2128] dark:hover:bg-slate-800 border border-border text-foreground transition-colors rounded-xl font-bold text-[13px] flex items-center justify-center gap-2">
@@ -520,6 +593,37 @@ export default function HomeFeedPage() {
             className="max-w-full max-h-full object-contain rounded-lg shadow-2xl" 
             alt="Full screen view" 
           />
+        </div>
+      )}
+      
+      {/* Messaging Modal */}
+      {isMessageModalOpen && selectedPitch && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setIsMessageModalOpen(false)}>
+          <div className="bg-background rounded-2xl p-6 w-full max-w-md shadow-2xl relative" onClick={e => e.stopPropagation()}>
+            <button onClick={() => setIsMessageModalOpen(false)} className="absolute top-4 right-4 text-muted-foreground hover:text-foreground">
+              <X className="w-5 h-5" />
+            </button>
+            <h3 className="text-xl font-bold mb-1">Message {selectedPitch.full_name}</h3>
+            <p className="text-[13px] text-muted-foreground mb-4">Start a conversation about their pitch.</p>
+            
+            <textarea
+              value={messageText}
+              onChange={(e) => setMessageText(e.target.value)}
+              placeholder="Hi there, we loved your pitch and would like to discuss..."
+              className="w-full h-32 p-3 bg-slate-100 dark:bg-[#202327] rounded-xl border border-transparent focus:border-indigo-500 focus:bg-background focus:ring-1 focus:ring-indigo-500 transition-colors resize-none text-[14px]"
+            />
+            
+            <div className="flex justify-end mt-4">
+              <button
+                onClick={handleSendMessage}
+                disabled={sendingMessage || !messageText.trim()}
+                className="px-6 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-xl font-bold text-[14px] transition-colors flex items-center gap-2 disabled:opacity-50"
+              >
+                {sendingMessage && <Loader2 className="w-4 h-4 animate-spin" />}
+                Send Message
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

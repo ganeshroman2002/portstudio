@@ -108,7 +108,7 @@ export default function EditProfilePage() {
           instagram: socialLinks.instagram,
           youtube: socialLinks.youtube,
           website: socialLinks.website,
-        });
+        }, { onConflict: 'profile_id' });
         
         if (error) alert("Error saving social links: " + error.message);
         else alert("Social links saved successfully!");

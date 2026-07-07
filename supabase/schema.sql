@@ -7,6 +7,7 @@
 create table public.profiles (
   id uuid references auth.users on delete cascade not null primary key,
   -- Basic Info
+  account_type text default 'talent',
   full_name text,
   username text unique,
   avatar_url text,
@@ -263,3 +264,69 @@ create policy "Anyone can upload a portfolio image."
 create policy "Anyone can update their portfolio image."
   on storage.objects for update
   using ( bucket_id = 'portfolios' and auth.role() = 'authenticated' );
+
+-- ==========================================
+-- MESSAGING & NOTIFICATIONS
+-- ==========================================
+
+-- 7. CONVERSATIONS
+create table public.conversations (
+  id uuid default gen_random_uuid() primary key,
+  participant1_id uuid references public.profiles(id) on delete cascade not null,
+  participant2_id uuid references public.profiles(id) on delete cascade not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()),
+  created_at timestamp with time zone default timezone('utc'::text, now()),
+  unique(participant1_id, participant2_id)
+);
+
+-- 8. MESSAGES
+create table public.messages (
+  id uuid default gen_random_uuid() primary key,
+  conversation_id uuid references public.conversations(id) on delete cascade not null,
+  sender_id uuid references public.profiles(id) on delete cascade not null,
+  content text not null,
+  read_at timestamp with time zone,
+  created_at timestamp with time zone default timezone('utc'::text, now())
+);
+
+-- 9. NOTIFICATIONS
+create table public.notifications (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references public.profiles(id) on delete cascade not null,
+  sender_id uuid references public.profiles(id) on delete cascade,
+  type text not null, -- 'message', 'invite', 'system'
+  message text not null,
+  link text,
+  read boolean default false,
+  created_at timestamp with time zone default timezone('utc'::text, now())
+);
+
+-- RLS for Messages & Notifications
+alter table public.conversations enable row level security;
+alter table public.messages enable row level security;
+alter table public.notifications enable row level security;
+
+-- Conversations: Only participants can view
+create policy "Participants can view conversations" on public.conversations for select using (auth.uid() = participant1_id or auth.uid() = participant2_id);
+create policy "Participants can insert conversations" on public.conversations for insert with check (auth.uid() = participant1_id or auth.uid() = participant2_id);
+create policy "Participants can update conversations" on public.conversations for update using (auth.uid() = participant1_id or auth.uid() = participant2_id);
+
+-- Messages: Only conversation participants can view
+create policy "Participants can view messages" on public.messages for select using (
+  exists (
+    select 1 from public.conversations c 
+    where c.id = conversation_id and (c.participant1_id = auth.uid() or c.participant2_id = auth.uid())
+  )
+);
+create policy "Users can send messages" on public.messages for insert with check (auth.uid() = sender_id);
+create policy "Users can update read status" on public.messages for update using (
+  exists (
+    select 1 from public.conversations c 
+    where c.id = conversation_id and (c.participant1_id = auth.uid() or c.participant2_id = auth.uid())
+  )
+);
+
+-- Notifications: Only owner can view/update
+create policy "Users can view their notifications" on public.notifications for select using (auth.uid() = user_id);
+create policy "Users can update their notifications" on public.notifications for update using (auth.uid() = user_id);
+create policy "Anyone can insert notifications" on public.notifications for insert with check (true);

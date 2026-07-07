@@ -5,7 +5,9 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/client";
 
-export default function SignupPage() {
+import { Suspense } from "react";
+
+function SignupForm() {
   const searchParams = useSearchParams();
   const initialRole = searchParams.get("role") === "company" ? "company" : "talent";
 
@@ -275,5 +277,13 @@ export default function SignupPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function SignupPage() {
+  return (
+    <Suspense fallback={<div className="flex h-screen items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-indigo-500" /></div>}>
+      <SignupForm />
+    </Suspense>
   );
 }

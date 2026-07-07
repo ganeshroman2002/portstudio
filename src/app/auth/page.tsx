@@ -18,16 +18,28 @@ export default function AuthPage() {
     setLoading(true);
     setError(null);
     
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
     if (error) {
       setError(error.message);
-    } else {
-      // Upon successful login, redirect to the dashboard or home
-      window.location.href = "/";
+    } else if (data.user) {
+      // Check if user is a company
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('account_type')
+        .eq('id', data.user.id)
+        .single();
+        
+      const isCompany = data.user.user_metadata?.role === 'company' || profile?.account_type === 'company';
+        
+      if (isCompany) {
+        window.location.href = "/company";
+      } else {
+        window.location.href = "/";
+      }
     }
     setLoading(false);
   };
