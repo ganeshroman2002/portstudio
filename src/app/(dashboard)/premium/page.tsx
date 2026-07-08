@@ -61,8 +61,8 @@ export default function PremiumPage() {
         <div className="w-full max-w-md bg-white dark:bg-slate-900 border border-indigo-200 dark:border-indigo-900/50 rounded-2xl p-6 mb-8 shadow-sm">
           <h3 className="text-lg font-bold mb-2">Your Current Status</h3>
           <div className="flex justify-between items-center text-sm">
-            <span className="text-muted-foreground">Pitches Available:</span>
-            <span className="font-black text-indigo-600 dark:text-indigo-400 text-lg">{pitchesLeft}</span>
+            <span className="text-muted-foreground">Pitches Remaining:</span>
+            <span className="font-black text-indigo-600 dark:text-indigo-400 text-lg">{pitchesLeft} / {totalLimit}</span>
           </div>
           {pitchesLeft === 0 && (
             <div className="mt-3 text-xs text-rose-500 font-medium bg-rose-50 dark:bg-rose-500/10 p-2 rounded-lg text-center">
@@ -101,13 +101,23 @@ export default function PremiumPage() {
               </div>
             </div>
 
-            <Link 
-              href="/checkout" 
-              className="w-full py-4 bg-indigo-500 hover:bg-indigo-600 text-white rounded-xl font-bold text-lg transition-all hover:shadow-lg hover:shadow-indigo-500/25 flex items-center justify-center gap-2 mb-8"
-            >
-              Buy 3 Pitches for ₹49
-              <Zap className="w-5 h-5" />
-            </Link>
+            {pitchesLeft > 0 ? (
+              <button 
+                disabled
+                className="w-full py-4 bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-500 rounded-xl font-bold text-lg flex items-center justify-center gap-2 mb-8 cursor-not-allowed"
+              >
+                Use all pitches to unlock
+                <Zap className="w-5 h-5 opacity-50" />
+              </button>
+            ) : (
+              <Link 
+                href="/checkout" 
+                className="w-full py-4 bg-indigo-500 hover:bg-indigo-600 text-white rounded-xl font-bold text-lg transition-all hover:shadow-lg hover:shadow-indigo-500/25 flex items-center justify-center gap-2 mb-8"
+              >
+                Buy 3 Pitches for ₹49
+                <Zap className="w-5 h-5" />
+              </Link>
+            )}
 
             <div className="space-y-4">
               {[

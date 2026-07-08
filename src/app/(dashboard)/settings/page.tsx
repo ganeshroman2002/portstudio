@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import { useTheme } from "next-themes";
-import { Moon, Sun, ArrowLeft, LogOut, Bell } from "lucide-react";
+import { Moon, Sun, ArrowLeft, LogOut, Bell, UserPlus, MessageCircle } from "lucide-react";
 import Link from "next/link";
 import { createClient } from "@/lib/client";
 
@@ -10,6 +10,8 @@ export default function SettingsPage() {
   const [mounted, setMounted] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [followNotifications, setFollowNotifications] = useState(true);
+  const [messageNotifications, setMessageNotifications] = useState(true);
   const [pitchesCount, setPitchesCount] = useState(0);
   const [userProfile, setUserProfile] = useState<any>(null);
   const [saving, setSaving] = useState(false);
@@ -27,6 +29,8 @@ export default function SettingsPage() {
         if (data) {
           setUserProfile(data);
           setNotificationsEnabled(data.notifications_enabled !== false);
+          setFollowNotifications(data.follow_notifications !== false);
+          setMessageNotifications(data.message_notifications !== false);
         }
         
         // Fetch how many pitches the user has actually posted
@@ -56,6 +60,30 @@ export default function SettingsPage() {
     if (error) {
       alert("Failed to update settings: " + error.message);
       setNotificationsEnabled(!newValue);
+    }
+    setSaving(false);
+  };
+
+  const toggleFollowNotifications = async () => {
+    if (!userProfile) return;
+    setSaving(true);
+    const newValue = !followNotifications;
+    setFollowNotifications(newValue);
+    const { error } = await supabase.from('profiles').update({ follow_notifications: newValue }).eq('id', userProfile.id);
+    if (error) {
+      setFollowNotifications(!newValue);
+    }
+    setSaving(false);
+  };
+
+  const toggleMessageNotifications = async () => {
+    if (!userProfile) return;
+    setSaving(true);
+    const newValue = !messageNotifications;
+    setMessageNotifications(newValue);
+    const { error } = await supabase.from('profiles').update({ message_notifications: newValue }).eq('id', userProfile.id);
+    if (error) {
+      setMessageNotifications(!newValue);
     }
     setSaving(false);
   };
@@ -122,24 +150,64 @@ export default function SettingsPage() {
 
         <h3 className="text-xl font-extrabold mb-4 mt-8">Notifications</h3>
         
-        <div className="bg-slate-50 dark:bg-slate-900 rounded-2xl border border-border p-4">
-          <div className="flex items-center justify-between">
+        <div className="bg-slate-50 dark:bg-slate-900 rounded-2xl border border-border overflow-hidden">
+          {/* Master toggle */}
+          <div className="flex items-center justify-between p-4 border-b border-border">
             <div className="flex items-center gap-4">
               <div className="w-10 h-10 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-xl flex items-center justify-center shrink-0">
                 <Bell className="w-5 h-5" />
               </div>
               <div>
                 <p className="font-bold text-[15px]">Push Notifications</p>
-                <p className="text-[14px] text-muted-foreground">Receive alerts for messages and interviews.</p>
+                <p className="text-[14px] text-muted-foreground">Master switch for all notifications.</p>
               </div>
             </div>
-            
             <button 
               onClick={toggleNotifications}
               disabled={saving}
               className={`w-14 h-8 rounded-full transition-colors relative flex items-center px-1 ${notificationsEnabled ? 'bg-indigo-500' : 'bg-slate-200 dark:bg-slate-700'}`}
             >
               <div className={`w-6 h-6 bg-white rounded-full transition-transform shadow-sm ${notificationsEnabled ? 'translate-x-6' : 'translate-x-0'}`} />
+            </button>
+          </div>
+
+          {/* Follow notifications */}
+          <div className={`flex items-center justify-between p-4 border-b border-border transition-opacity ${!notificationsEnabled ? 'opacity-40 pointer-events-none' : ''}`}>
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 bg-violet-100 dark:bg-violet-900/30 text-violet-600 dark:text-violet-400 rounded-xl flex items-center justify-center shrink-0">
+                <UserPlus className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="font-bold text-[15px]">Follow Notifications</p>
+                <p className="text-[14px] text-muted-foreground">Get notified when someone follows you.</p>
+              </div>
+            </div>
+            <button 
+              onClick={toggleFollowNotifications}
+              disabled={saving}
+              className={`w-14 h-8 rounded-full transition-colors relative flex items-center px-1 ${followNotifications ? 'bg-indigo-500' : 'bg-slate-200 dark:bg-slate-700'}`}
+            >
+              <div className={`w-6 h-6 bg-white rounded-full transition-transform shadow-sm ${followNotifications ? 'translate-x-6' : 'translate-x-0'}`} />
+            </button>
+          </div>
+
+          {/* Message notifications */}
+          <div className={`flex items-center justify-between p-4 transition-opacity ${!notificationsEnabled ? 'opacity-40 pointer-events-none' : ''}`}>
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-xl flex items-center justify-center shrink-0">
+                <MessageCircle className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="font-bold text-[15px]">Message Notifications</p>
+                <p className="text-[14px] text-muted-foreground">Get notified when you receive a new message.</p>
+              </div>
+            </div>
+            <button 
+              onClick={toggleMessageNotifications}
+              disabled={saving}
+              className={`w-14 h-8 rounded-full transition-colors relative flex items-center px-1 ${messageNotifications ? 'bg-indigo-500' : 'bg-slate-200 dark:bg-slate-700'}`}
+            >
+              <div className={`w-6 h-6 bg-white rounded-full transition-transform shadow-sm ${messageNotifications ? 'translate-x-6' : 'translate-x-0'}`} />
             </button>
           </div>
         </div>

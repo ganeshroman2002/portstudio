@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
+import { createClient } from '@supabase/supabase-js';
 
 export async function POST(req: Request) {
   try {
@@ -14,6 +15,47 @@ export async function POST(req: Request) {
       .digest('hex');
 
     if (generated_signature === razorpay_signature) {
+      const authHeader = req.headers.get('Authorization');
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+      const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;
+      
+      const supabase = createClient(supabaseUrl, supabaseKey, {
+        global: {
+          headers: {
+            Authorization: authHeader || ''
+          }
+        }
+      });
+      
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+      if (user) {
+        // Fetch current profile
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('available_pitches, purchased_pitches')
+          .eq('id', user.id)
+          .single();
+
+        const currentPitches = profile?.available_pitches ?? 3;
+        const currentPurchased = profile?.purchased_pitches ?? 0;
+        
+        const { error: updateError } = await supabase
+          .from('profiles')
+          .update({ 
+            available_pitches: currentPitches + 3,
+            purchased_pitches: currentPurchased + 3,
+            subscription_tier: 'premium'
+          })
+          .eq('id', user.id);
+          
+        if (updateError) {
+          console.error("Failed to update profile pitches:", updateError);
+        }
+      } else {
+        console.error("User not found in verify route:", userError);
+      }
+
       return NextResponse.json({ status: 'success', message: 'Payment verified successfully' });
     } else {
       return NextResponse.json(

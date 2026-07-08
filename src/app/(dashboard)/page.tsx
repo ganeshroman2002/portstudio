@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import { Loader2, Plus, Link as LinkIcon, Code, X, ImageIcon, AlertCircle, Sparkles, Search, MoreHorizontal, ArrowLeft, LayoutGrid, List } from "lucide-react";
+import { Loader2, Plus, Link as LinkIcon, Code, X, ImageIcon, AlertCircle, Sparkles, Search, MoreHorizontal, ArrowLeft, LayoutGrid, List, UserPlus, UserMinus } from "lucide-react";
 import { createClient } from "@/lib/client";
 import Link from "next/link";
 
@@ -9,15 +9,20 @@ export default function HomeFeedPage() {
   const [pitches, setPitches] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [userProfile, setUserProfile] = useState<any>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [selectedPitch, setSelectedPitch] = useState<any>(null);
   const [suggestedUsers, setSuggestedUsers] = useState<any[]>([]);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [zoomedImage, setZoomedImage] = useState<string | null>(null);
+  // Follow state keyed by profile_id of pitch owner
+  const [followingMap, setFollowingMap] = useState<Record<string, boolean>>({});
+  const [followingInProgress, setFollowingInProgress] = useState<Record<string, boolean>>({});
 
   const fetchPitches = async () => {
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
+      setCurrentUserId(user.id);
       const { data: p } = await supabase.from('profiles').select('*').eq('id', user.id).single();
       setUserProfile({ ...p, role: user.user_metadata?.role || p?.account_type });
       
@@ -30,7 +35,22 @@ export default function HomeFeedPage() {
       .select('*, profiles(full_name, username, avatar_url)')
       .order('created_at', { ascending: false });
 
-    if (data) setPitches(data);
+    if (data) {
+      setPitches(data);
+      // After loading pitches, check which owners we already follow
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user && data.length > 0) {
+        const ownerIds = [...new Set(data.map((d: any) => d.profile_id).filter(Boolean))];
+        const { data: myFollows } = await supabase
+          .from('follows')
+          .select('following_id')
+          .eq('follower_id', user.id)
+          .in('following_id', ownerIds);
+        const map: Record<string, boolean> = {};
+        (myFollows ?? []).forEach((f: any) => { map[f.following_id] = true; });
+        setFollowingMap(map);
+      }
+    }
     setLoading(false);
   };
 
@@ -60,6 +80,36 @@ export default function HomeFeedPage() {
     const url = `${window.location.origin}/${username}`;
     navigator.clipboard.writeText(url);
     alert('Profile link copied to clipboard!');
+  };
+
+  // Send a follow notification to the target user
+  const sendFollowNotification = async (targetUserId: string, followerName: string) => {
+    await supabase.from('notifications').insert({
+      user_id: targetUserId,
+      sender_id: currentUserId,
+      type: 'follow',
+      message: `${followerName} started following you.`,
+      link: '/profile',
+    });
+  };
+
+  // Toggle follow/unfollow for a pitch owner
+  const handleToggleFollow = async (targetProfileId: string, targetName: string) => {
+    if (!currentUserId || followingInProgress[targetProfileId] || currentUserId === targetProfileId) return;
+    setFollowingInProgress(prev => ({ ...prev, [targetProfileId]: true }));
+    const isFollowing = !!followingMap[targetProfileId];
+    if (isFollowing) {
+      await supabase.from('follows').delete()
+        .eq('follower_id', currentUserId)
+        .eq('following_id', targetProfileId);
+      setFollowingMap(prev => ({ ...prev, [targetProfileId]: false }));
+    } else {
+      await supabase.from('follows').insert({ follower_id: currentUserId, following_id: targetProfileId });
+      setFollowingMap(prev => ({ ...prev, [targetProfileId]: true }));
+      // Send notification to the followed user
+      await sendFollowNotification(targetProfileId, userProfile?.full_name || 'Someone');
+    }
+    setFollowingInProgress(prev => ({ ...prev, [targetProfileId]: false }));
   };
 
   return (
@@ -148,9 +198,22 @@ export default function HomeFeedPage() {
                               >
                                 View Pitch Details
                               </button>
+                              {pitch.profile_id !== currentUserId && (
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); handleToggleFollow(pitch.profile_id, pitch.full_name); }}
+                                  disabled={!!followingInProgress[pitch.profile_id]}
+                                  className={`px-4 py-2 rounded-2xl font-bold text-[14px] transition-all ${
+                                    followingMap[pitch.profile_id]
+                                      ? 'border border-border text-foreground hover:border-rose-400 hover:text-rose-500'
+                                      : 'bg-foreground text-background hover:opacity-90'
+                                  }`}
+                                >
+                                  {followingInProgress[pitch.profile_id] ? '...' : followingMap[pitch.profile_id] ? 'Following' : 'Follow'}
+                                </button>
+                              )}
                               <button 
                                 onClick={(e) => { e.stopPropagation(); handleShareProfile(p?.username); }}
-                                className="px-6 py-2 bg-background border border-border hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors rounded-2xl font-bold text-[14px]"
+                                className="px-4 py-2 bg-background border border-border hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors rounded-2xl font-bold text-[14px]"
                               >
                                 Share
                               </button>
@@ -235,7 +298,20 @@ export default function HomeFeedPage() {
                             >
                               View Pitch Details
                             </button>
-                            <button onClick={(e) => { e.stopPropagation(); handleShareProfile(p?.username); }} className="px-5 sm:px-6 py-2 sm:py-2.5 bg-transparent border border-border hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors rounded-xl sm:rounded-2xl font-bold text-[14px] sm:text-[15px]">
+                            {pitch.profile_id !== currentUserId && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleToggleFollow(pitch.profile_id, pitch.full_name); }}
+                                disabled={!!followingInProgress[pitch.profile_id]}
+                                className={`px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl font-bold text-[14px] sm:text-[15px] transition-all ${
+                                  followingMap[pitch.profile_id]
+                                    ? 'border border-border text-foreground hover:border-rose-400 hover:text-rose-500'
+                                    : 'bg-foreground text-background hover:opacity-90'
+                                }`}
+                              >
+                                {followingInProgress[pitch.profile_id] ? '...' : followingMap[pitch.profile_id] ? 'Following' : 'Follow'}
+                              </button>
+                            )}
+                            <button onClick={(e) => { e.stopPropagation(); handleShareProfile(p?.username); }} className="px-4 sm:px-5 py-2 sm:py-2.5 bg-transparent border border-border hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors rounded-xl sm:rounded-2xl font-bold text-[14px] sm:text-[15px]">
                               Share
                             </button>
                           </div>

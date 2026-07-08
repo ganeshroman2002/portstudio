@@ -1,6 +1,6 @@
 "use client";
-import React, { useState, useEffect } from "react";
-import { Calendar, MapPin, Link as LinkIcon, ArrowLeft, Loader2, X, Code, Sparkles } from "lucide-react";
+import React, { useState, useEffect, useCallback } from "react";
+import { Calendar, MapPin, Link as LinkIcon, ArrowLeft, Loader2, X, Code, Sparkles, UserPlus, UserMinus } from "lucide-react";
 import Link from "next/link";
 import { createClient } from "@/lib/client";
 
@@ -11,6 +11,18 @@ export default function ProfilePage() {
   const [pitches, setPitches] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedPitch, setSelectedPitch] = useState<any>(null);
+
+  // Real follow data
+  const [followersCount, setFollowersCount] = useState(0);
+  const [followingCount, setFollowingCount] = useState(0);
+  const [modalList, setModalList] = useState<any[]>([]);
+  const [modalLoading, setModalLoading] = useState(false);
+  // Map of userId -> isFollowing for the modal list
+  const [followingMap, setFollowingMap] = useState<Record<string, boolean>>({});
+  const [followingInProgress, setFollowingInProgress] = useState<Record<string, boolean>>({});
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+  const supabase = createClient();
 
   const renderFormattedText = (text: string) => {
     if (!text) return null;
@@ -31,12 +43,32 @@ export default function ProfilePage() {
       return <React.Fragment key={i}>{part}</React.Fragment>;
     });
   };
-  const supabase = createClient();
+
+  const handleDeletePitch = async (pitchId: string) => {
+    if (!confirm('Are you sure you want to delete this pitch? You will regain a pitch slot.')) return;
+    const { error } = await supabase.from('talent_pitches').delete().eq('id', pitchId);
+    if (!error) {
+      setPitches(pitches.filter(p => p.id !== pitchId));
+    } else {
+      alert("Failed to delete pitch: " + error.message);
+    }
+  };
+
+  // Fetch real follow counts for the current user
+  const fetchFollowCounts = useCallback(async (userId: string) => {
+    const [{ count: frs }, { count: fng }] = await Promise.all([
+      supabase.from('follows').select('*', { count: 'exact', head: true }).eq('following_id', userId),
+      supabase.from('follows').select('*', { count: 'exact', head: true }).eq('follower_id', userId),
+    ]);
+    setFollowersCount(frs ?? 0);
+    setFollowingCount(fng ?? 0);
+  }, [supabase]);
 
   useEffect(() => {
     const fetchProfile = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
+        setCurrentUserId(user.id);
         const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single();
         if (data) setProfile(data);
 
@@ -46,11 +78,101 @@ export default function ProfilePage() {
           .eq('profile_id', user.id)
           .order('created_at', { ascending: false });
         if (userPitches) setPitches(userPitches);
+
+        // Fetch real follow counts
+        await fetchFollowCounts(user.id);
       }
       setLoading(false);
     };
     fetchProfile();
   }, []);
+
+  // Open followers/following modal and load real list
+  const openFollowModal = useCallback(async (type: 'followers' | 'following') => {
+    if (!currentUserId) return;
+    setFollowModal(type);
+    setModalLoading(true);
+    setModalList([]);
+
+    let profileIds: string[] = [];
+
+    if (type === 'followers') {
+      // People who follow ME: follower_id
+      const { data } = await supabase
+        .from('follows')
+        .select('follower_id')
+        .eq('following_id', currentUserId);
+      profileIds = (data ?? []).map((r: any) => r.follower_id);
+    } else {
+      // People I follow: following_id
+      const { data } = await supabase
+        .from('follows')
+        .select('following_id')
+        .eq('follower_id', currentUserId);
+      profileIds = (data ?? []).map((r: any) => r.following_id);
+    }
+
+    if (profileIds.length === 0) {
+      setModalList([]);
+      setModalLoading(false);
+      return;
+    }
+
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, full_name, username, avatar_url, bio')
+      .in('id', profileIds);
+
+    setModalList(profiles ?? []);
+
+    // For each listed user, check if current user is following them
+    if (profiles && profiles.length > 0) {
+      const { data: myFollows } = await supabase
+        .from('follows')
+        .select('following_id')
+        .eq('follower_id', currentUserId)
+        .in('following_id', profiles.map((p: any) => p.id));
+
+      const map: Record<string, boolean> = {};
+      (myFollows ?? []).forEach((f: any) => { map[f.following_id] = true; });
+      setFollowingMap(map);
+    }
+
+    setModalLoading(false);
+  }, [currentUserId, supabase]);
+
+  // Toggle follow / unfollow for a user in the modal
+  const handleToggleFollow = async (targetId: string) => {
+    if (!currentUserId || followingInProgress[targetId]) return;
+    setFollowingInProgress(prev => ({ ...prev, [targetId]: true }));
+
+    const isFollowing = !!followingMap[targetId];
+
+    if (isFollowing) {
+      await supabase.from('follows').delete()
+        .eq('follower_id', currentUserId)
+        .eq('following_id', targetId);
+      setFollowingMap(prev => ({ ...prev, [targetId]: false }));
+      // If viewing 'following' list and we unfollowed, remove from list + update count
+      if (followModal === 'following') {
+        setModalList(prev => prev.filter(u => u.id !== targetId));
+        setFollowingCount(c => Math.max(0, c - 1));
+      }
+    } else {
+      await supabase.from('follows').insert({ follower_id: currentUserId, following_id: targetId });
+      setFollowingMap(prev => ({ ...prev, [targetId]: true }));
+      // Send a follow notification to the target user
+      await supabase.from('notifications').insert({
+        user_id: targetId,
+        sender_id: currentUserId,
+        type: 'follow',
+        message: `${profile?.full_name || 'Someone'} started following you.`,
+        link: '/profile',
+      });
+    }
+
+    setFollowingInProgress(prev => ({ ...prev, [targetId]: false }));
+  };
 
   if (loading) {
     return (
@@ -60,6 +182,7 @@ export default function ProfilePage() {
     );
   }
 
+  // ─── Follow Modal ────────────────────────────────────────────────────────────
   if (followModal) {
     return (
       <div className="w-full flex flex-col h-full bg-background relative">
@@ -76,10 +199,10 @@ export default function ProfilePage() {
 
         {/* Tabs */}
         <div className="flex border-b border-border shrink-0">
-          {['followers', 'following'].map((tab) => (
+          {(['followers', 'following'] as const).map((tab) => (
             <button
               key={tab}
-              onClick={() => setFollowModal(tab as any)}
+              onClick={() => openFollowModal(tab)}
               className={`flex-1 h-[53px] flex items-center justify-center relative hover:bg-slate-200/20 dark:hover:bg-slate-800/50 transition-colors ${followModal === tab ? 'font-bold text-foreground' : 'text-muted-foreground font-medium'}`}
             >
               <span className="capitalize">{tab}</span>
@@ -91,32 +214,61 @@ export default function ProfilePage() {
         </div>
 
         {/* List */}
-        <div className="flex-1 w-full">
-          {[
-            { name: "369 Labs", handle: "@369labsx", bio: "ai & marketing", avatar: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=150&q=80" },
-            { name: "OpenAI", handle: "@OpenAI", bio: "OpenAI’s mission is to ensure that artificial general intelligence benefits all of humanity.", avatar: "https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=150&q=80" },
-            { name: "Sarang Patil", handle: "@SarangP55046923", bio: "There are dreams created which needs to be fulfilled", avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&q=80" },
-            { name: "Elon Musk", handle: "@elonmusk", bio: "Starmind", avatar: "https://images.unsplash.com/photo-1568602471122-7832951cc4c5?w=150&q=80" },
-          ].map((u, i) => (
-            <div key={i} className="flex items-start justify-between p-4 hover:bg-slate-50/50 dark:hover:bg-slate-900/50 transition-colors cursor-pointer border-b border-border/50">
-              <div className="flex gap-3 flex-1 overflow-hidden mr-4">
-                <img src={u.avatar} alt={u.name} className="w-10 h-10 rounded-full object-cover shrink-0" />
-                <div className="flex flex-col min-w-0">
-                  <span className="font-bold text-[15px] hover:underline truncate leading-tight">{u.name}</span>
-                  <span className="text-[15px] text-muted-foreground truncate leading-tight">{u.handle}</span>
-                  <p className="text-[15px] mt-1 line-clamp-2">{u.bio}</p>
-                </div>
-              </div>
-              <button className="bg-foreground text-background shrink-0 px-4 py-1.5 rounded-full font-bold text-[14px] hover:opacity-90 transition-opacity mt-1">
-                Following
-              </button>
+        <div className="flex-1 w-full overflow-y-auto">
+          {modalLoading ? (
+            <div className="flex justify-center p-12">
+              <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
             </div>
-          ))}
+          ) : modalList.length === 0 ? (
+            <div className="flex flex-col items-center justify-center p-12 text-center gap-3">
+              <UserPlus className="w-12 h-12 text-muted-foreground/40" />
+              <p className="text-muted-foreground font-medium">
+                {followModal === 'followers' ? 'No followers yet.' : 'Not following anyone yet.'}
+              </p>
+            </div>
+          ) : (
+            modalList.map((u) => (
+              <div key={u.id} className="flex items-start justify-between p-4 hover:bg-slate-50/50 dark:hover:bg-slate-900/50 transition-colors cursor-pointer border-b border-border/50">
+                <div className="flex gap-3 flex-1 overflow-hidden mr-4">
+                  <img
+                    src={u.avatar_url || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&q=80"}
+                    alt={u.full_name}
+                    className="w-10 h-10 rounded-full object-cover shrink-0"
+                  />
+                  <div className="flex flex-col min-w-0">
+                    <span className="font-bold text-[15px] hover:underline truncate leading-tight">{u.full_name || 'User'}</span>
+                    <span className="text-[15px] text-muted-foreground truncate leading-tight">@{u.username || 'user'}</span>
+                    {u.bio && <p className="text-[14px] mt-1 line-clamp-2 text-muted-foreground">{u.bio}</p>}
+                  </div>
+                </div>
+                {u.id !== currentUserId && (
+                  <button
+                    onClick={() => handleToggleFollow(u.id)}
+                    disabled={!!followingInProgress[u.id]}
+                    className={`shrink-0 px-4 py-1.5 rounded-full font-bold text-[14px] mt-1 transition-all flex items-center gap-1.5 ${
+                      followingMap[u.id]
+                        ? 'border border-border hover:border-rose-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-foreground'
+                        : 'bg-foreground text-background hover:opacity-90'
+                    }`}
+                  >
+                    {followingInProgress[u.id] ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : followingMap[u.id] ? (
+                      <><UserMinus className="w-3.5 h-3.5" /> Unfollow</>
+                    ) : (
+                      <><UserPlus className="w-3.5 h-3.5" /> Follow</>
+                    )}
+                  </button>
+                )}
+              </div>
+            ))
+          )}
         </div>
       </div>
     );
   }
 
+  // ─── Main Profile View ───────────────────────────────────────────────────────
   return (
     <>
       {/* Header */}
@@ -146,10 +298,10 @@ export default function ProfilePage() {
             <div className="flex flex-col gap-1.5 min-w-[140px] bg-slate-50 dark:bg-[#16181c] px-3 py-2 rounded-xl border border-border hidden sm:flex">
               <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider">
                 <span className="text-muted-foreground">Pitches</span>
-                <span className="text-indigo-500">{pitches.length} / 3</span>
+                <span className="text-indigo-500">{pitches.length} / {profile?.available_pitches ?? 3}</span>
               </div>
               <div className="w-full bg-slate-200 dark:bg-slate-800 rounded-full h-1.5">
-                <div className="bg-indigo-500 h-1.5 rounded-full transition-all" style={{ width: `${Math.min((pitches.length / 3) * 100, 100)}%` }}></div>
+                <div className="bg-indigo-500 h-1.5 rounded-full transition-all" style={{ width: `${Math.min((pitches.length / Math.max(1, profile?.available_pitches ?? 3)) * 100, 100)}%` }}></div>
               </div>
             </div>
             <Link href="/profile/edit" className="px-4 py-1.5 border border-border rounded-full font-bold hover:bg-slate-200/20 dark:hover:bg-slate-800/50 transition-colors text-[15px] h-fit shrink-0">
@@ -172,13 +324,16 @@ export default function ProfilePage() {
           </div>
 
           <div className="flex flex-col sm:items-end gap-2 shrink-0 sm:mt-1">
+            {/* Real follow counts – clickable */}
             <div className="flex gap-5 text-[14px]">
-              <div onClick={() => setFollowModal('following')} className="hover:underline cursor-pointer">
-                <strong className="text-foreground">842</strong> <span className="text-muted-foreground">Following</span>
-              </div>
-              <div onClick={() => setFollowModal('followers')} className="hover:underline cursor-pointer">
-                <strong className="text-foreground">3,241</strong> <span className="text-muted-foreground">Followers</span>
-              </div>
+              <button onClick={() => openFollowModal('following')} className="hover:underline cursor-pointer text-left">
+                <strong className="text-foreground">{followingCount.toLocaleString()}</strong>{' '}
+                <span className="text-muted-foreground">Following</span>
+              </button>
+              <button onClick={() => openFollowModal('followers')} className="hover:underline cursor-pointer text-left">
+                <strong className="text-foreground">{followersCount.toLocaleString()}</strong>{' '}
+                <span className="text-muted-foreground">Followers</span>
+              </button>
             </div>
 
             <div className="flex flex-wrap sm:justify-end gap-x-4 gap-y-2 mt-1 text-[13px] text-muted-foreground">
@@ -191,6 +346,31 @@ export default function ProfilePage() {
                 <Calendar className="w-3.5 h-3.5" /> Joined Recently
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Pitch Database / Stats */}
+        <div className="mx-4 mt-2 mb-4 p-4 bg-slate-50 dark:bg-[#16181c] border border-border rounded-xl flex gap-4 overflow-x-auto hide-scrollbar relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 blur-3xl rounded-full"></div>
+          
+          <div className="flex-1 min-w-[100px] z-10">
+             <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">Pitches Posted</div>
+             <div className="text-2xl font-black text-foreground">{pitches.length}</div>
+          </div>
+          <div className="w-px bg-border shrink-0 z-10"></div>
+          <div className="flex-1 min-w-[100px] z-10">
+             <div className="text-[11px] font-bold text-emerald-500 uppercase tracking-wider mb-0.5">Purchased</div>
+             <div className="text-2xl font-black text-foreground">{profile?.purchased_pitches ?? 0}</div>
+          </div>
+          <div className="w-px bg-border shrink-0 z-10"></div>
+          <div className="flex-1 min-w-[100px] z-10">
+             <div className="text-[11px] font-bold text-indigo-500 uppercase tracking-wider mb-0.5">Remaining</div>
+             <div className="text-2xl font-black text-foreground">{Math.max(0, (profile?.available_pitches ?? 3) - pitches.length)}</div>
+          </div>
+          <div className="w-px bg-border shrink-0 z-10"></div>
+          <div className="flex-1 min-w-[100px] z-10">
+             <div className="text-[11px] font-bold text-violet-500 uppercase tracking-wider mb-0.5">Followers</div>
+             <div className="text-2xl font-black text-foreground">{followersCount.toLocaleString()}</div>
           </div>
         </div>
       </div>
@@ -276,12 +456,21 @@ export default function ProfilePage() {
                     </div>
                   )}
 
-                  <div className="flex gap-4 mt-4">
+                  <div className="flex gap-4 mt-4 flex-wrap">
                     <button 
                       onClick={() => setSelectedPitch(pitch)}
-                      className="flex-1 py-2 bg-indigo-500 hover:bg-indigo-600 text-white transition-colors rounded-lg font-bold text-[14px]"
+                      className="flex-1 py-2 bg-indigo-500 hover:bg-indigo-600 text-white transition-colors rounded-lg font-bold text-[14px] min-w-[140px]"
                     >
-                      View Pitch Details
+                      View Details
+                    </button>
+                    <Link href={`/publish?edit=${pitch.id}`} className="px-4 py-2 bg-transparent border border-border hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors rounded-lg font-bold text-[14px] flex items-center justify-center">
+                      Edit
+                    </Link>
+                    <button 
+                      onClick={() => handleDeletePitch(pitch.id)}
+                      className="px-4 py-2 bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 transition-colors rounded-lg font-bold text-[14px]"
+                    >
+                      Delete
                     </button>
                     <button className="px-4 py-2 bg-transparent border border-border hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors rounded-lg font-bold text-[14px]">
                       Share
@@ -351,7 +540,6 @@ export default function ProfilePage() {
                 </div>
               )}
 
-              {/* Showcase thumbnails */}
               {selectedPitch.portfolio_images && selectedPitch.portfolio_images.length > 0 && (
                 <div className="mt-6">
                   <h3 className="font-bold text-lg mb-2">Portfolio Showcase</h3>
@@ -365,7 +553,7 @@ export default function ProfilePage() {
                 </div>
               )}
 
-              {/* Stats / Badges */}
+              {/* Stats */}
               <div className="mt-6">
                  <h3 className="font-bold text-lg mb-2">Details</h3>
                  <div className="grid grid-cols-2 gap-3">
@@ -416,7 +604,7 @@ export default function ProfilePage() {
                         <span className="font-bold text-[16px] mt-1">{selectedPitch.content_niche}</span>
                       </div>
                       <div className="bg-slate-50 dark:bg-[#16181c] border border-border rounded-xl p-4 flex flex-col justify-center">
-                        <span className="text-[12px] text-muted-foreground font-semibold uppercase">Followers</span>
+                        <span className="text-[12px] text-muted-foreground font-semibold uppercase">Social Followers</span>
                         <span className="font-bold text-[16px] mt-1">{selectedPitch.followers_count}</span>
                       </div>
                       <div className="bg-slate-50 dark:bg-[#16181c] border border-border rounded-xl p-4 flex flex-col justify-center">
@@ -428,7 +616,7 @@ export default function ProfilePage() {
                            <span className="text-[12px] text-muted-foreground font-semibold uppercase">Rate per Post</span>
                            <span className="font-bold text-[16px] mt-1">₹{selectedPitch.rate_per_post.toLocaleString()}</span>
                          </div>
-                      )}
+                       )}
                     </>
                   )}
                 </div>
@@ -438,6 +626,9 @@ export default function ProfilePage() {
                 <button className="flex-1 py-3.5 bg-indigo-500 hover:bg-indigo-600 text-white transition-colors rounded-xl font-bold text-[16px] shadow-lg shadow-indigo-500/20">
                   {selectedPitch.persona_type === 'job_seeker' ? 'Apply now' : selectedPitch.persona_type === 'freelancer' ? 'Hire for project' : 'Request collab'}
                 </button>
+                <Link href={`/publish?edit=${selectedPitch.id}`} className="px-6 py-3.5 bg-transparent border border-border hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors rounded-xl font-bold text-[16px] flex items-center justify-center">
+                  Edit Pitch
+                </Link>
               </div>
             </div>
           </div>

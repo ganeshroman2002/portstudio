@@ -2,12 +2,13 @@
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/client";
-import { Loader2 } from "lucide-react";
+import { Loader2, User, MoreHorizontal } from "lucide-react";
 import Link from "next/link";
 import { Home, Search, Bell, Mail, Settings, Calendar } from "lucide-react";
 
 export default function CompanyLayout({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState<any>(null);
   const router = useRouter();
   const supabase = createClient();
 
@@ -21,7 +22,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
 
       const { data: profile } = await supabase
         .from('profiles')
-        .select('account_type')
+        .select('*')
         .eq('id', user.id)
         .single();
 
@@ -33,6 +34,7 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
         return;
       }
 
+      if (profile) setProfile(profile);
       setLoading(false);
     };
 
@@ -67,16 +69,40 @@ export default function CompanyLayout({ children }: { children: React.ReactNode 
             { icon: Bell, label: "Notifications", href: "/company/notifications", active: false },
             { icon: Mail, label: "Messages", href: "/company/messages", active: false },
             { icon: Calendar, label: "Schedule", href: "/company/schedule", active: false },
+            { icon: User, label: "Profile", href: "/company/profile", active: false },
             { icon: Settings, label: "Settings", href: "/company/settings", active: false },
-          ].map((item, i) => (
-            <Link key={i} href={item.href} className={`flex items-center justify-center lg:justify-start gap-4 p-3 lg:px-4 lg:py-3 rounded-full transition-colors group ${item.active ? 'font-bold' : 'hover:bg-slate-200/20 dark:hover:bg-slate-800/50'}`}>
-              <item.icon className={`w-7 h-7 ${item.active ? 'text-foreground' : 'text-foreground group-hover:scale-110 transition-transform'}`} strokeWidth={item.active ? 2.5 : 2} />
-              <span className={`hidden lg:block text-xl ${item.active ? 'text-foreground' : 'text-foreground'}`}>
-                {item.label}
-              </span>
-            </Link>
-          ))}
+          ].map((item, i) => {
+            const isActive = typeof window !== 'undefined' && window.location.pathname.startsWith(item.href) && (item.href !== '/company' || window.location.pathname === '/company');
+            return (
+              <Link key={i} href={item.href} className={`flex items-center justify-center lg:justify-start gap-4 p-3 lg:px-4 lg:py-3 rounded-full transition-colors group ${isActive ? 'bg-slate-200/50 dark:bg-slate-800 font-bold' : 'hover:bg-slate-200/20 dark:hover:bg-slate-800/50'}`}>
+                <item.icon className={`w-7 h-7 ${isActive ? 'text-foreground' : 'text-foreground group-hover:scale-110 transition-transform'}`} strokeWidth={isActive ? 2.5 : 2} />
+                <span className={`hidden lg:block text-xl ${isActive ? 'text-foreground' : 'text-foreground'}`}>
+                  {item.label}
+                </span>
+              </Link>
+            )
+          })}
         </nav>
+
+        {/* User Profile Mini */}
+        <div className="mt-auto pt-4 pb-2 w-full lg:px-2">
+          <Link href="/company/profile" className="flex items-center justify-between w-full p-3 rounded-full hover:bg-slate-200/20 dark:hover:bg-slate-800/50 transition-colors">
+            <div className="flex items-center gap-3">
+              <img 
+                src={profile?.avatar_url || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&q=80"} 
+                alt="Avatar" 
+                className="w-10 h-10 rounded-full object-cover shrink-0" 
+              />
+              <div className="hidden lg:flex flex-col items-start leading-tight min-w-0">
+                <span className="font-bold text-[15px] truncate max-w-[120px]">{profile?.full_name || "Company"}</span>
+                <span className="text-[15px] text-muted-foreground truncate max-w-[120px]">
+                  {profile?.username ? `@${profile.username}` : "Setup profile"}
+                </span>
+              </div>
+            </div>
+            <MoreHorizontal className="hidden lg:block w-5 h-5 shrink-0 text-muted-foreground" />
+          </Link>
+        </div>
       </aside>
 
       {/* Main Content Area */}

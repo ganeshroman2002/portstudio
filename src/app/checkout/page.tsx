@@ -68,7 +68,12 @@ export default function SecureCheckoutPage() {
     setProcessing(true);
     setError(null);
     try {
-      // 1. Create Order on Server
+      // 1. Get Supabase Session
+      const { createClient } = await import("@/lib/client");
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+
+      // 2. Create Order on Server
       const res = await fetch("/api/payment/create-order", {
         method: "POST",
       });
@@ -76,7 +81,7 @@ export default function SecureCheckoutPage() {
       const orderData = await res.json();
       if (!res.ok) throw new Error(orderData.error || "Failed to create order");
 
-      // 2. Initialize Razorpay
+      // 3. Initialize Razorpay
       const options = {
         key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "dummy_key", 
         amount: orderData.amount, 
@@ -86,10 +91,14 @@ export default function SecureCheckoutPage() {
         order_id: orderData.id, 
         handler: async function (response: any) {
           try {
-             // 3. Verify Payment
+             // 4. Verify Payment
              const verifyRes = await fetch("/api/payment/verify", {
                method: "POST",
-               headers: { "Content-Type": "application/json" },
+               headers: { 
+                 "Content-Type": "application/json",
+                 "Authorization": session?.access_token ? `Bearer ${session.access_token}` : ""
+               },
+               credentials: "include",
                body: JSON.stringify({
                  razorpay_order_id: response.razorpay_order_id,
                  razorpay_payment_id: response.razorpay_payment_id,

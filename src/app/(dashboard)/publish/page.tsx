@@ -13,6 +13,8 @@ export default function PublishPage() {
   const [loading, setLoading] = useState(false);
   const [userSession, setUserSession] = useState<any>(null);
   const [userProfile, setUserProfile] = useState<any>(null);
+  const [pitchesCount, setPitchesCount] = useState(0);
+  const [availablePitches, setAvailablePitches] = useState(3);
 
   const renderFormattedText = (text: string) => {
     if (!text) return null;
@@ -73,6 +75,15 @@ export default function PublishPage() {
         const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single();
         if (data) {
           setUserProfile(data);
+          setAvailablePitches(data.available_pitches ?? 3);
+          
+          const { count } = await supabase
+            .from('talent_pitches')
+            .select('*', { count: 'exact', head: true })
+            .eq('profile_id', user.id);
+            
+          setPitchesCount(count || 0);
+
           setFormData((prev: any) => ({
             ...prev,
             full_name: data.full_name || "",
@@ -177,6 +188,9 @@ export default function PublishPage() {
       skills: formData.skills.filter((s: string) => s !== skillToRemove)
     });
   };
+
+  const pitchesLeft = Math.max(0, availablePitches - pitchesCount);
+  const outOfPitches = pitchesLeft <= 0;
 
   return (
     <div className="w-full flex flex-col h-full bg-background relative overflow-hidden">
@@ -395,11 +409,16 @@ export default function PublishPage() {
 
             <button 
               onClick={handlePublish}
-              disabled={loading || !formData.full_name}
+              disabled={loading || !formData.full_name || outOfPitches}
               className="w-full py-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-foreground rounded-lg font-bold transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
             >
-              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Publish post →"}
+              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : (outOfPitches ? "Out of Pitches - Upgrade" : "Publish post →")}
             </button>
+            {outOfPitches && (
+              <p className="text-center text-sm text-rose-500 mt-2 font-medium">
+                You've reached your pitch limit. <Link href="/premium" className="underline hover:text-rose-600">Get more pitches</Link>
+              </p>
+            )}
           </div>
         </div>
 

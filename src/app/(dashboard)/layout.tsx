@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { 
   Home, Search, Bell, Mail, Star, User, MoreHorizontal, 
-  Settings, Sparkles, Plus, Calendar
+  Settings, Sparkles, Plus, Calendar, Building2
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -13,7 +13,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter();
   const isPublishPage = pathname === '/publish';
   const [profile, setProfile] = useState<any>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [suggestedUsers, setSuggestedUsers] = useState<any[]>([]);
+  const [followingMap, setFollowingMap] = useState<Record<string, boolean>>({});
+  const [followingInProgress, setFollowingInProgress] = useState<Record<string, boolean>>({});
   const supabase = createClient();
 
   useEffect(() => {
@@ -40,37 +43,36 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           // Shuffle all users first
           const shuffledUsers = [...allUsers].sort(() => 0.5 - Math.random());
           
-          let selectedUsers = [];
+          let selectedUsers: any[] = [];
           
           if (data?.skills && data.skills.length > 0) {
-            // Score users based on skill overlap
             const scoredUsers = shuffledUsers.map(u => {
               const overlap = (u.skills || []).filter((s: string) => data.skills.includes(s)).length;
               return { user: u, score: overlap };
             });
-            
-            // Sort by score descending
             scoredUsers.sort((a, b) => b.score - a.score);
-            
-            // Pick top 2 matching (60%)
             const topMatches = scoredUsers.filter(u => u.score > 0).slice(0, 2).map(u => u.user);
-            
-            // If we didn't find 2 matches, we'll just fill the rest randomly
-            const matchesCount = topMatches.length;
-            const remainingNeeded = 3 - matchesCount;
-            
-            // Pick random users from those NOT in topMatches
+            const remainingNeeded = 3 - topMatches.length;
             const remainingUsers = shuffledUsers.filter(u => !topMatches.find(tm => tm.id === u.id));
-            const randomPicks = remainingUsers.slice(0, remainingNeeded);
-            
-            selectedUsers = [...topMatches, ...randomPicks];
+            selectedUsers = [...topMatches, ...remainingUsers.slice(0, remainingNeeded)];
           } else {
-            // If current user has no skills, just pick 3 random
             selectedUsers = shuffledUsers.slice(0, 3);
           }
           
-          // Shuffle final selection so matches aren't always at the top
-          setSuggestedUsers(selectedUsers.sort(() => 0.5 - Math.random()));
+          selectedUsers = selectedUsers.sort(() => 0.5 - Math.random());
+          setSuggestedUsers(selectedUsers);
+
+          // Check which suggested users are already followed
+          if (selectedUsers.length > 0) {
+            const { data: myFollows } = await supabase
+              .from('follows')
+              .select('following_id')
+              .eq('follower_id', user.id)
+              .in('following_id', selectedUsers.map(u => u.id));
+            const map: Record<string, boolean> = {};
+            (myFollows ?? []).forEach((f: any) => { map[f.following_id] = true; });
+            setFollowingMap(map);
+          }
         }
       }
     };
@@ -103,13 +105,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 { icon: Calendar, label: "Schedule", href: "/schedule" },
                 { icon: Star, label: "Premium", href: "/premium" },
                 { icon: User, label: "Profile", href: "/profile" },
+                { icon: Building2, label: "Companies", href: "/companies" },
                 { icon: Settings, label: "Settings", href: "/settings" },
               ].map((item, idx) => {
                 const isActive = pathname === item.href || (item.href !== "/" && pathname?.startsWith(item.href));
                 return (
                   <Link key={idx} href={item.href} className="flex items-center gap-4 p-3 rounded-full hover:bg-slate-200/20 dark:hover:bg-slate-800/50 transition-colors w-fit xl:w-full">
-                    <item.icon className={`w-7 h-7 ${isActive ? 'fill-foreground' : ''}`} strokeWidth={isActive ? 2.5 : 2} />
-                    <span className={`hidden xl:block text-xl ${isActive ? 'font-bold' : 'font-normal'}`}>
+                    <item.icon className={`w-7 h-7 ${isActive ? 'text-foreground' : 'text-foreground/80'}`} strokeWidth={isActive ? 2.5 : 2} />
+                    <span className={`hidden xl:block text-xl ${isActive ? 'font-bold text-foreground' : 'font-normal text-foreground/90'}`}>
                       {item.label}
                     </span>
                   </Link>
@@ -179,20 +182,47 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div className="bg-slate-50 dark:bg-[#16181c] rounded-2xl border border-border mb-4 pt-3 pb-1">
             <h2 className="px-4 text-[20px] font-extrabold mb-3">You might like</h2>
             
-            {suggestedUsers.map((user, i) => (
-              <div key={i} className="px-4 py-3 flex items-center justify-between hover:bg-slate-200/20 dark:hover:bg-slate-800/50 transition-colors cursor-pointer">
-                <div className="flex gap-3">
-                  <img src={user.avatar_url || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&q=80"} className="w-10 h-10 rounded-full object-cover" />
-                  <div className="flex flex-col leading-tight">
-                    <span className="font-bold text-[15px] hover:underline">{user.full_name || 'User'}</span>
-                    <span className="text-[15px] text-muted-foreground">{user.username ? `@${user.username}` : ''}</span>
+            {suggestedUsers.map((user, i) => {
+              const isFollowing = !!followingMap[user.id];
+              const inProgress = !!followingInProgress[user.id];
+
+              const handleToggle = async () => {
+                const uid = (await supabase.auth.getUser()).data.user?.id;
+                if (!uid || inProgress) return;
+                setFollowingInProgress(prev => ({ ...prev, [user.id]: true }));
+                if (isFollowing) {
+                  await supabase.from('follows').delete().eq('follower_id', uid).eq('following_id', user.id);
+                  setFollowingMap(prev => ({ ...prev, [user.id]: false }));
+                } else {
+                  await supabase.from('follows').insert({ follower_id: uid, following_id: user.id });
+                  setFollowingMap(prev => ({ ...prev, [user.id]: true }));
+                }
+                setFollowingInProgress(prev => ({ ...prev, [user.id]: false }));
+              };
+
+              return (
+                <div key={i} className="px-4 py-3 flex items-center justify-between hover:bg-slate-200/20 dark:hover:bg-slate-800/50 transition-colors cursor-pointer">
+                  <div className="flex gap-3">
+                    <img src={user.avatar_url || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&q=80"} className="w-10 h-10 rounded-full object-cover" />
+                    <div className="flex flex-col leading-tight">
+                      <span className="font-bold text-[15px] hover:underline">{user.full_name || 'User'}</span>
+                      <span className="text-[15px] text-muted-foreground">{user.username ? `@${user.username}` : ''}</span>
+                    </div>
                   </div>
+                  <button
+                    onClick={handleToggle}
+                    disabled={inProgress}
+                    className={`px-4 py-1.5 rounded-full font-bold text-[14px] transition-all ${
+                      isFollowing
+                        ? 'border border-border text-foreground hover:border-rose-400 hover:text-rose-500'
+                        : 'bg-foreground text-background hover:opacity-90'
+                    }`}
+                  >
+                    {inProgress ? '...' : isFollowing ? 'Following' : 'Follow'}
+                  </button>
                 </div>
-                <button className="bg-foreground text-background px-4 py-1.5 rounded-full font-bold text-[14px] hover:opacity-90 transition-opacity">
-                  Follow
-                </button>
-              </div>
-            ))}
+              );
+            })}
             <div className="px-4 py-4 text-[15px] text-indigo-500 hover:bg-slate-200/20 dark:hover:bg-slate-800/50 rounded-b-2xl cursor-pointer transition-colors">
               Show more
             </div>
