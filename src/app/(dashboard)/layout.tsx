@@ -132,7 +132,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* ═══════════════════════════════════════════════════════════════ */}
       <div className="md:hidden flex items-center justify-between px-4 py-3 border-b border-border bg-background/90 backdrop-blur-md sticky top-0 z-50 shrink-0">
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-1.5">
+        <Link href="/" className="flex items-center gap-2">
+          <img src="/logo.png" alt="PortStudio Logo" className="w-8 h-8 rounded-lg object-contain" />
           <span className="text-2xl font-black tracking-tighter">Port<span className="text-indigo-500">Studio</span></span>
         </Link>
 
@@ -168,8 +169,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             
             <div className="flex flex-col gap-2">
               {/* Logo */}
-              <Link href="/" className="w-12 h-12 rounded-full flex items-center justify-center hover:bg-slate-200/20 dark:hover:bg-slate-800/50 transition-colors mb-2 xl:ml-2">
-                <span className="text-3xl font-black tracking-tighter">P<span className="hidden xl:inline text-xl">ort</span></span>
+              <Link href="/" className="flex items-center gap-2 p-2 rounded-xl hover:bg-slate-200/20 dark:hover:bg-slate-800/50 transition-colors mb-2">
+                <img src="/logo.png" alt="Logo" className="w-10 h-10 rounded-xl object-contain shrink-0" />
+                <span className="hidden xl:block text-2xl font-black tracking-tighter">Port<span className="text-indigo-500">Studio</span></span>
               </Link>
 
               {/* Navigation Links */}
