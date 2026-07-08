@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { createClient } from "@/lib/client";
 import { Calendar as CalendarIcon, Loader2, Video, CheckCircle2, XCircle, Clock } from "lucide-react";
+import Link from "next/link";
 
 export default function SchedulePage() {
   const supabase = createClient();
@@ -23,7 +24,7 @@ export default function SchedulePage() {
           talent:profiles!talent_id(id, full_name, avatar_url)
         `)
         .or(`company_id.eq.${user.id},talent_id.eq.${user.id}`)
-        .order('interview_date', { ascending: true });
+        .order('created_at', { ascending: false });
 
       if (error && error.code !== 'PGRST116') {
         console.error("Error fetching interviews:", error.message || error);
@@ -97,7 +98,16 @@ export default function SchedulePage() {
                         {interview.status}
                       </span>
                     </div>
-                    <h3 className="text-xl font-bold mb-1">Interview with {otherPerson?.full_name || 'User'}</h3>
+                    <h3 className="text-xl font-bold mb-1">
+                      Interview with{' '}
+                      {otherPerson?.id ? (
+                        <Link href={`/profile?id=${otherPerson.id}`} className="hover:underline hover:text-indigo-500 transition-colors">
+                          {otherPerson.full_name || 'User'}
+                        </Link>
+                      ) : (
+                        <span>{otherPerson?.full_name || 'User'}</span>
+                      )}
+                    </h3>
                     <p className="text-sm text-muted-foreground capitalize">{isCompany ? 'Talent' : 'Company'}</p>
                   </div>
                 </div>
@@ -119,9 +129,6 @@ export default function SchedulePage() {
                       </button>
                     </>
                   )}
-                  <button className="flex-1 sm:flex-none px-4 py-2 bg-slate-100 text-foreground hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-xl font-bold text-sm transition-colors flex items-center justify-center gap-2">
-                    <Video className="w-4 h-4" /> Join Call
-                  </button>
                 </div>
               </div>
             );

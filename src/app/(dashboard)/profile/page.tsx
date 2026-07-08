@@ -2,9 +2,13 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Calendar, MapPin, Link as LinkIcon, ArrowLeft, Loader2, X, Code, Sparkles, UserPlus, UserMinus } from "lucide-react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/client";
 
 export default function ProfilePage() {
+  const searchParams = useSearchParams();
+  const viewedId = searchParams.get('id'); // if set, we're viewing another user
+
   const [activeTab, setActiveTab] = useState("Posts");
   const [followModal, setFollowModal] = useState<'followers' | 'following' | null>(null);
   const [profile, setProfile] = useState<any>(null);
@@ -17,12 +21,15 @@ export default function ProfilePage() {
   const [followingCount, setFollowingCount] = useState(0);
   const [modalList, setModalList] = useState<any[]>([]);
   const [modalLoading, setModalLoading] = useState(false);
-  // Map of userId -> isFollowing for the modal list
   const [followingMap, setFollowingMap] = useState<Record<string, boolean>>({});
   const [followingInProgress, setFollowingInProgress] = useState<Record<string, boolean>>({});
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  // For viewing another user — are we following them?
+  const [isFollowingViewed, setIsFollowingViewed] = useState(false);
+  const [followingViewed, setFollowingViewed] = useState(false);
 
   const supabase = createClient();
+  const isOwnProfile = !viewedId || viewedId === currentUserId;
 
   const renderFormattedText = (text: string) => {
     if (!text) return null;
@@ -69,23 +76,35 @@ export default function ProfilePage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         setCurrentUserId(user.id);
-        const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+        const targetId = viewedId || user.id;
+
+        const { data } = await supabase.from('profiles').select('*').eq('id', targetId).single();
         if (data) setProfile(data);
 
         const { data: userPitches } = await supabase
           .from('talent_pitches')
           .select('*, profiles(full_name, username, avatar_url)')
-          .eq('profile_id', user.id)
+          .eq('profile_id', targetId)
           .order('created_at', { ascending: false });
         if (userPitches) setPitches(userPitches);
 
-        // Fetch real follow counts
-        await fetchFollowCounts(user.id);
+        await fetchFollowCounts(targetId);
+
+        // If viewing another user, check if current user follows them
+        if (viewedId && viewedId !== user.id) {
+          const { data: followRow } = await supabase
+            .from('follows')
+            .select('id')
+            .eq('follower_id', user.id)
+            .eq('following_id', viewedId)
+            .single();
+          setIsFollowingViewed(!!followRow);
+        }
       }
       setLoading(false);
     };
     fetchProfile();
-  }, []);
+  }, [viewedId]);
 
   // Open followers/following modal and load real list
   const openFollowModal = useCallback(async (type: 'followers' | 'following') => {
@@ -236,7 +255,9 @@ export default function ProfilePage() {
                     className="w-10 h-10 rounded-full object-cover shrink-0"
                   />
                   <div className="flex flex-col min-w-0">
-                    <span className="font-bold text-[15px] hover:underline truncate leading-tight">{u.full_name || 'User'}</span>
+                    <span className="font-bold text-[15px] hover:underline truncate leading-tight">
+                      <Link href={`/profile?id=${u.id}`} onClick={() => setFollowModal(null)}>{u.full_name || 'User'}</Link>
+                    </span>
                     <span className="text-[15px] text-muted-foreground truncate leading-tight">@{u.username || 'user'}</span>
                     {u.bio && <p className="text-[14px] mt-1 line-clamp-2 text-muted-foreground">{u.bio}</p>}
                   </div>
@@ -295,18 +316,54 @@ export default function ProfilePage() {
           </div>
 
           <div className="flex justify-end items-start gap-4 pt-3 px-4 h-[72px]">
-            <div className="flex flex-col gap-1.5 min-w-[140px] bg-slate-50 dark:bg-[#16181c] px-3 py-2 rounded-xl border border-border hidden sm:flex">
-              <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider">
-                <span className="text-muted-foreground">Pitches</span>
-                <span className="text-indigo-500">{pitches.length} / {profile?.available_pitches ?? 3}</span>
-              </div>
-              <div className="w-full bg-slate-200 dark:bg-slate-800 rounded-full h-1.5">
-                <div className="bg-indigo-500 h-1.5 rounded-full transition-all" style={{ width: `${Math.min((pitches.length / Math.max(1, profile?.available_pitches ?? 3)) * 100, 100)}%` }}></div>
-              </div>
-            </div>
-            <Link href="/profile/edit" className="px-4 py-1.5 border border-border rounded-full font-bold hover:bg-slate-200/20 dark:hover:bg-slate-800/50 transition-colors text-[15px] h-fit shrink-0">
-              Edit profile
-            </Link>
+            {isOwnProfile ? (
+              <>
+                <div className="flex flex-col gap-1.5 min-w-[140px] bg-slate-50 dark:bg-[#16181c] px-3 py-2 rounded-xl border border-border hidden sm:flex">
+                  <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider">
+                    <span className="text-muted-foreground">Pitches</span>
+                    <span className="text-indigo-500">{pitches.length} / {profile?.available_pitches ?? 3}</span>
+                  </div>
+                  <div className="w-full bg-slate-200 dark:bg-slate-800 rounded-full h-1.5">
+                    <div className="bg-indigo-500 h-1.5 rounded-full transition-all" style={{ width: `${Math.min((pitches.length / Math.max(1, profile?.available_pitches ?? 3)) * 100, 100)}%` }}></div>
+                  </div>
+                </div>
+                <Link href="/profile/edit" className="px-4 py-1.5 border border-border rounded-full font-bold hover:bg-slate-200/20 dark:hover:bg-slate-800/50 transition-colors text-[15px] h-fit shrink-0">
+                  Edit profile
+                </Link>
+              </>
+            ) : (
+              <button
+                onClick={async () => {
+                  if (!currentUserId || followingViewed) return;
+                  setFollowingViewed(true);
+                  if (isFollowingViewed) {
+                    await supabase.from('follows').delete().eq('follower_id', currentUserId).eq('following_id', viewedId!);
+                    setIsFollowingViewed(false);
+                    setFollowersCount(c => Math.max(0, c - 1));
+                  } else {
+                    await supabase.from('follows').insert({ follower_id: currentUserId, following_id: viewedId });
+                    setIsFollowingViewed(true);
+                    setFollowersCount(c => c + 1);
+                    // Notify
+                    await supabase.from('notifications').insert({
+                      user_id: viewedId,
+                      sender_id: currentUserId,
+                      type: 'follow',
+                      message: `Someone started following you.`,
+                      link: '/profile',
+                    });
+                  }
+                  setFollowingViewed(false);
+                }}
+                className={`px-5 py-1.5 rounded-full font-bold text-[15px] h-fit shrink-0 transition-all ${
+                  isFollowingViewed
+                    ? 'border border-border text-foreground hover:border-rose-400 hover:text-rose-500'
+                    : 'bg-foreground text-background hover:opacity-90'
+                }`}
+              >
+                {followingViewed ? '...' : isFollowingViewed ? 'Following' : 'Follow'}
+              </button>
+            )}
           </div>
         </div>
 

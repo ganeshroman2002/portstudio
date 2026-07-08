@@ -296,7 +296,9 @@ export default function HomeFeedPage() {
                             {/* Info block */}
                             <div className="bg-background dark:bg-[#13151a] rounded-2xl p-4 flex flex-col gap-1 border border-border/50">
                               <div className="flex items-center gap-1.5 flex-wrap">
-                                <h4 className="font-extrabold text-[16px] leading-tight hover:underline cursor-pointer">{pitch.full_name}</h4>
+                                <h4 className="font-extrabold text-[16px] leading-tight hover:underline cursor-pointer">
+                                  <Link href={`/profile?id=${pitch.profile_id}`}>{pitch.full_name}</Link>
+                                </h4>
                                 <span className="text-muted-foreground text-[13px]">@{p?.username || 'user'}</span>
                               </div>
                               <p className="text-[13px] leading-snug text-muted-foreground mt-0.5">{pitch.tagline}</p>
@@ -385,7 +387,9 @@ export default function HomeFeedPage() {
                             {/* Info */}
                             <div className="flex flex-col flex-1 pt-1">
                               <div className="flex items-center gap-1.5 flex-wrap">
-                                <h4 className="font-extrabold text-[18px] sm:text-[20px] leading-tight hover:underline cursor-pointer">{pitch.full_name}</h4>
+                                <h4 className="font-extrabold text-[18px] sm:text-[20px] leading-tight hover:underline cursor-pointer">
+                                  <Link href={`/profile?id=${pitch.profile_id}`}>{pitch.full_name}</Link>
+                                </h4>
                                 <span className="text-muted-foreground text-[14px] sm:text-[15px]">@{p?.username || 'user'}</span>
                               </div>
                               <p className="text-[14px] sm:text-[15px] leading-snug text-muted-foreground mt-1">{pitch.tagline}</p>
@@ -474,7 +478,9 @@ export default function HomeFeedPage() {
                     )}
                   </div>
                   <div className="flex flex-col">
-                    <h4 className="font-extrabold text-3xl leading-tight">{selectedPitch.full_name}</h4>
+                    <h4 className="font-extrabold text-3xl leading-tight hover:underline cursor-pointer">
+                      <Link href={`/profile?id=${selectedPitch.profile_id}`}>{selectedPitch.full_name}</Link>
+                    </h4>
                     <span className="text-muted-foreground text-lg mt-0.5">@{modalProfile?.username || 'user'}</span>
                   </div>
                 </div>
@@ -571,20 +577,36 @@ export default function HomeFeedPage() {
             <div className="bg-slate-50 dark:bg-[#16181c] rounded-2xl border border-border mb-4 pt-3 pb-1">
               <h2 className="px-4 text-[20px] font-extrabold mb-3">You might like</h2>
               
-              {suggestedUsers.map((user, i) => (
-                <div key={i} className="px-4 py-3 flex items-center justify-between hover:bg-slate-200/20 dark:hover:bg-slate-800/50 transition-colors cursor-pointer">
-                  <div className="flex gap-3">
-                    <img src={user.avatar_url || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&q=80"} className="w-10 h-10 rounded-full object-cover" />
-                    <div className="flex flex-col leading-tight">
-                      <span className="font-bold text-[15px] hover:underline">{user.full_name || 'User'}</span>
-                      <span className="text-[15px] text-muted-foreground">{user.username ? `@${user.username}` : ''}</span>
+              {suggestedUsers.map((user) => {
+                const isFollowing = !!followingMap[user.id];
+                const inProgress = !!followingInProgress[user.id];
+                return (
+                  <Link
+                    key={user.id}
+                    href={`/profile?id=${user.id}`}
+                    className="px-4 py-3 flex items-center justify-between hover:bg-slate-200/20 dark:hover:bg-slate-800/50 transition-colors"
+                  >
+                    <div className="flex gap-3 min-w-0">
+                      <img src={user.avatar_url || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&q=80"} className="w-10 h-10 rounded-full object-cover shrink-0" />
+                      <div className="flex flex-col leading-tight min-w-0">
+                        <span className="font-bold text-[15px] hover:underline truncate">{user.full_name || 'User'}</span>
+                        <span className="text-[14px] text-muted-foreground truncate">{user.username ? `@${user.username}` : ''}</span>
+                      </div>
                     </div>
-                  </div>
-                  <button className="bg-foreground text-background px-4 py-1.5 rounded-full font-bold text-[14px] hover:opacity-90 transition-opacity">
-                    Follow
-                  </button>
-                </div>
-              ))}
+                    <button
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleToggleFollow(user.id, user.full_name); }}
+                      disabled={inProgress}
+                      className={`ml-3 shrink-0 px-4 py-1.5 rounded-full font-bold text-[14px] transition-all ${
+                        isFollowing
+                          ? 'border border-border text-foreground hover:border-rose-400 hover:text-rose-500'
+                          : 'bg-foreground text-background hover:opacity-90'
+                      }`}
+                    >
+                      {inProgress ? '...' : isFollowing ? 'Following' : 'Follow'}
+                    </button>
+                  </Link>
+                );
+              })}
               <div className="px-4 py-4 text-[15px] text-indigo-500 hover:bg-slate-200/20 dark:hover:bg-slate-800/50 rounded-b-2xl cursor-pointer transition-colors">
                 Show more
               </div>
