@@ -1,11 +1,11 @@
 "use client";
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, Suspense } from "react";
 import { Calendar, MapPin, Link as LinkIcon, ArrowLeft, Loader2, X, Code, Sparkles, UserPlus, UserMinus } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/client";
 
-export default function ProfilePage() {
+function ProfileContent() {
   const searchParams = useSearchParams();
   const viewedId = searchParams.get('id'); // if set, we're viewing another user
 
@@ -692,5 +692,13 @@ export default function ProfilePage() {
         </div>
       )}
     </>
+  );
+}
+
+export default function ProfilePage() {
+  return (
+    <Suspense fallback={<div className="flex h-full items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-indigo-500" /></div>}>
+      <ProfileContent />
+    </Suspense>
   );
 }
