@@ -61,9 +61,9 @@ export default function AuthPage() {
       {/* Left Column - Hero/Marketing */}
       <div className="hidden lg:flex w-1/2 flex-col relative overflow-hidden bg-card">
         {/* Background Gradients */}
-        <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-purple-100/50 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[600px] h-[600px] bg-indigo-50/50 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute bottom-[20%] left-[-20%] w-[700px] h-[700px] bg-[#f3edff] rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-purple-100/50 dark:bg-purple-900/20 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[600px] h-[600px] bg-indigo-50/50 dark:bg-indigo-900/20 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-[20%] left-[-20%] w-[700px] h-[700px] bg-[#f3edff] dark:bg-indigo-950/20 rounded-full blur-3xl pointer-events-none" />
 
         <div className="relative z-10 flex flex-col p-8 xl:p-16 h-full">
           {/* Logo */}
@@ -95,12 +95,12 @@ export default function AuthPage() {
             </svg>
 
             {/* Main Portfolio Card Mockup */}
-            <div className="absolute top-4 left-0 bg-card/80 backdrop-blur-xl p-5 xl:p-6 rounded-2xl shadow-[0_20px_40px_-15px_rgba(0,0,0,0.05)] border border-white/50 w-[380px] xl:w-[420px] transform hover:-translate-y-1 transition-transform duration-500">
+            <div className="absolute top-4 left-0 bg-card/80 dark:bg-card/90 backdrop-blur-xl p-5 xl:p-6 rounded-2xl shadow-[0_20px_40px_-15px_rgba(0,0,0,0.05)] border border-white/50 dark:border-white/10 w-[380px] xl:w-[420px] transform hover:-translate-y-1 transition-transform duration-500">
               <div className="flex justify-between items-start mb-5">
                 <div className="flex gap-4">
-                  <div className="w-12 h-12 xl:w-14 xl:h-14 rounded-full bg-slate-200 overflow-hidden relative border-2 border-white shadow-sm">
-                    <div className="w-full h-full bg-gradient-to-br from-indigo-100 to-purple-100 flex items-center justify-center">
-                       <User className="text-indigo-300 w-5 h-5 xl:w-6 xl:h-6" />
+                  <div className="w-12 h-12 xl:w-14 xl:h-14 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden relative border-2 border-white dark:border-slate-700 shadow-sm">
+                    <div className="w-full h-full bg-gradient-to-br from-indigo-100 to-purple-100 dark:from-indigo-900/50 dark:to-purple-900/50 flex items-center justify-center">
+                       <User className="text-indigo-300 dark:text-indigo-400 w-5 h-5 xl:w-6 xl:h-6" />
                     </div>
                   </div>
                   <div>
@@ -118,14 +118,14 @@ export default function AuthPage() {
               </div>
 
               <div className="flex gap-2 mb-5">
-                <span className="px-3 py-1 bg-indigo-50 text-indigo-600 rounded-full text-[10px] xl:text-xs font-medium">UI/UX</span>
-                <span className="px-3 py-1 bg-purple-50 text-purple-600 rounded-full text-[10px] xl:text-xs font-medium">Figma</span>
-                <span className="px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-[10px] xl:text-xs font-medium">Web Design</span>
+                <span className="px-3 py-1 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 rounded-full text-[10px] xl:text-xs font-medium">UI/UX</span>
+                <span className="px-3 py-1 bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 rounded-full text-[10px] xl:text-xs font-medium">Figma</span>
+                <span className="px-3 py-1 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-full text-[10px] xl:text-xs font-medium">Web Design</span>
               </div>
 
               <div className="grid grid-cols-3 gap-2 xl:gap-3">
                 {[1,2,3].map((i) => (
-                  <div key={i} className="aspect-[4/5] rounded-xl bg-slate-100 overflow-hidden relative group cursor-pointer">
+                  <div key={i} className="aspect-[4/5] rounded-xl bg-slate-100 dark:bg-slate-800 overflow-hidden relative group cursor-pointer">
                     <div className="absolute inset-0 bg-gradient-to-t from-slate-900/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                   </div>
                 ))}
@@ -134,8 +134,8 @@ export default function AuthPage() {
 
             {/* Floating Notification - New Match */}
             <div className="absolute top-24 right-4 bg-card/90 backdrop-blur p-3 xl:p-4 rounded-xl shadow-xl border border-border flex items-center gap-3 transform hover:scale-105 transition-transform animate-[bounce_4s_infinite]">
-              <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center">
-                <div className="w-3 h-3 bg-indigo-600 rounded-full" />
+              <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center">
+                <div className="w-3 h-3 bg-indigo-600 dark:bg-indigo-400 rounded-full" />
               </div>
               <div>
                 <p className="text-xs font-bold text-foreground">New Match</p>
@@ -148,11 +148,11 @@ export default function AuthPage() {
                <p className="text-xs font-bold text-foreground mb-2">Talent Shortlist</p>
                <div className="flex -space-x-2">
                  {[1,2,3,4].map((i) => (
-                   <div key={i} className="w-8 h-8 rounded-full bg-slate-200 border-2 border-white flex items-center justify-center overflow-hidden">
+                   <div key={i} className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-800 border-2 border-white dark:border-slate-700 flex items-center justify-center overflow-hidden">
                       <User className="text-muted-foreground w-4 h-4" />
                    </div>
                  ))}
-                 <div className="w-8 h-8 rounded-full bg-indigo-50 border-2 border-white flex items-center justify-center text-[10px] font-bold text-indigo-600">
+                 <div className="w-8 h-8 rounded-full bg-indigo-50 dark:bg-indigo-900/30 border-2 border-white dark:border-slate-700 flex items-center justify-center text-[10px] font-bold text-indigo-600 dark:text-indigo-400">
                    +12
                  </div>
                </div>
@@ -176,8 +176,8 @@ export default function AuthPage() {
         <div className="w-full max-w-[420px] m-auto bg-card rounded-3xl p-6 sm:p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-border shrink-0">
           
           <div className="flex flex-col items-center mb-6">
-            <div className="w-12 h-12 bg-indigo-50 rounded-full flex items-center justify-center mb-4">
-              <Lock className="w-5 h-5 text-indigo-600" />
+            <div className="w-12 h-12 bg-indigo-50 dark:bg-indigo-500/10 rounded-full flex items-center justify-center mb-4">
+              <Lock className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
             </div>
             <h2 className="text-xl sm:text-2xl font-bold text-foreground mb-1.5">Welcome Back</h2>
             <p className="text-xs sm:text-sm text-muted-foreground">Sign in to continue to PortStudio</p>
@@ -185,7 +185,7 @@ export default function AuthPage() {
 
           <form className="space-y-4" onSubmit={handleEmailLogin}>
             {error && (
-              <div className="p-3 text-xs sm:text-sm bg-red-50 text-red-600 rounded-xl border border-red-100 text-center">
+              <div className="p-3 text-xs sm:text-sm bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400 rounded-xl border border-red-100 dark:border-red-500/20 text-center">
                 {error}
               </div>
             )}
@@ -304,7 +304,7 @@ export default function AuthPage() {
 
             <div className="grid sm:grid-cols-2 gap-2 sm:gap-3">
               <Link href="/auth/signup?role=talent" className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 rounded-xl border border-transparent bg-indigo-500/10 hover:bg-indigo-500/20 border-indigo-500/30 transition-all text-left group">
-                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-indigo-100 flex items-center justify-center shrink-0 text-indigo-600 group-hover:scale-105 transition-transform">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-indigo-100 dark:bg-indigo-500/20 flex items-center justify-center shrink-0 text-indigo-600 dark:text-indigo-400 group-hover:scale-105 transition-transform">
                   <User className="w-4 h-4 sm:w-5 sm:h-5" />
                 </div>
                 <div>
@@ -314,7 +314,7 @@ export default function AuthPage() {
               </Link>
 
               <Link href="/auth/signup?role=company" className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 rounded-xl border border-transparent bg-purple-500/10 hover:bg-purple-500/20 border-purple-500/30 transition-all text-left group">
-                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-purple-100 flex items-center justify-center shrink-0 text-purple-600 group-hover:scale-105 transition-transform">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-purple-100 dark:bg-purple-500/20 flex items-center justify-center shrink-0 text-purple-600 dark:text-purple-400 group-hover:scale-105 transition-transform">
                   <Briefcase className="w-4 h-4 sm:w-5 sm:h-5" />
                 </div>
                 <div>
