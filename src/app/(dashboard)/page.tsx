@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect } from "react";
-import { Loader2, Plus, Link as LinkIcon, Code, X, ImageIcon, AlertCircle, Sparkles, Search, MoreHorizontal, ArrowLeft, LayoutGrid, List, UserPlus, UserMinus } from "lucide-react";
+import { Loader2, Plus, Link as LinkIcon, Code, X, ImageIcon, AlertCircle, Sparkles, Search, MoreHorizontal, ArrowLeft, LayoutGrid, List, UserPlus, UserMinus, Heart } from "lucide-react";
 import { createClient } from "@/lib/client";
 import Link from "next/link";
 
@@ -137,6 +137,25 @@ export default function HomeFeedPage() {
     setFollowingInProgress(prev => ({ ...prev, [targetProfileId]: false }));
   };
 
+  const handleToggleLike = async (pitchId: string, currentLikes: string[]) => {
+    if (!currentUserId) return;
+    const isLiked = currentLikes.includes(currentUserId);
+    const newLikes = isLiked 
+      ? currentLikes.filter(id => id !== currentUserId)
+      : [...currentLikes, currentUserId];
+
+    setPitches(prev => prev.map(p => p.id === pitchId ? { ...p, liked_by: newLikes } : p));
+    const { error } = await supabase.rpc('toggle_like', {
+      target_pitch_id: pitchId,
+      target_user_id: currentUserId
+    });
+    
+    if (error) {
+      console.error('Failed to toggle like:', error);
+      alert('Error saving like: ' + error.message);
+    }
+  };
+
   return (
     <div className="flex w-full h-full relative">
       {/* Center Column (Feed or Pitch Main Content) */}
@@ -239,6 +258,18 @@ export default function HomeFeedPage() {
                                 </button>
                               )}
                               <button 
+                                onClick={(e) => { e.stopPropagation(); handleToggleLike(pitch.id, pitch.liked_by || []); }}
+                                className={`flex items-center gap-1.5 px-4 py-2 border rounded-2xl font-bold text-[14px] transition-colors ${
+                                  (pitch.liked_by || []).includes(currentUserId) 
+                                    ? 'bg-rose-50 border-rose-200 text-rose-500 hover:bg-rose-100 dark:bg-rose-500/10 dark:border-rose-500/30' 
+                                    : 'bg-background border-border hover:bg-slate-50 dark:hover:bg-slate-800'
+                                }`}
+                              >
+                                <Heart className={`w-4 h-4 ${(pitch.liked_by || []).includes(currentUserId) ? 'fill-current text-rose-500' : 'text-foreground/70'}`} />
+                                {(pitch.liked_by || []).includes(currentUserId) ? 'Liked' : 'Like'} 
+                                {(pitch.liked_by || []).length > 0 && <span className="opacity-70 ml-0.5">({(pitch.liked_by || []).length})</span>}
+                              </button>
+                              <button 
                                 onClick={(e) => { e.stopPropagation(); handleShareProfile(p?.username); }}
                                 className="px-4 py-2 bg-background border border-border hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors rounded-2xl font-bold text-[14px]"
                               >
@@ -340,6 +371,18 @@ export default function HomeFeedPage() {
                                 {followingInProgress[pitch.profile_id] ? '...' : followingMap[pitch.profile_id] ? 'Following' : 'Follow'}
                               </button>
                             )}
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleToggleLike(pitch.id, pitch.liked_by || []); }}
+                              className={`flex items-center justify-center gap-1.5 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl font-bold text-[14px] sm:text-[15px] transition-all border ${
+                                (pitch.liked_by || []).includes(currentUserId) 
+                                  ? 'bg-rose-50 border-rose-200 text-rose-500 hover:bg-rose-100 dark:bg-rose-500/10 dark:border-rose-500/30' 
+                                  : 'bg-transparent border-border hover:bg-slate-50 dark:hover:bg-slate-800'
+                              }`}
+                            >
+                              <Heart className={`w-4 h-4 ${(pitch.liked_by || []).includes(currentUserId) ? 'fill-current text-rose-500' : 'text-foreground/70'}`} />
+                              {(pitch.liked_by || []).includes(currentUserId) ? 'Liked' : 'Like'} 
+                              {(pitch.liked_by || []).length > 0 && <span className="opacity-70 ml-0.5">({(pitch.liked_by || []).length})</span>}
+                            </button>
                             <button onClick={(e) => { e.stopPropagation(); handleShareProfile(p?.username); }} className="px-4 sm:px-5 py-2 sm:py-2.5 bg-transparent border border-border hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors rounded-xl sm:rounded-2xl font-bold text-[14px] sm:text-[15px]">
                               Share
                             </button>

@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect, useCallback, Suspense } from "react";
-import { Calendar, MapPin, Link as LinkIcon, ArrowLeft, Loader2, X, Code, Sparkles, UserPlus, UserMinus } from "lucide-react";
+import { Calendar, MapPin, Link as LinkIcon, ArrowLeft, Loader2, X, Code, Sparkles, UserPlus, UserMinus, Heart } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/client";
@@ -194,6 +194,39 @@ function ProfileContent() {
     }
 
     setFollowingInProgress(prev => ({ ...prev, [targetId]: false }));
+  };
+
+  const handleToggleLike = async (pitchId: string, currentLikes: string[]) => {
+    if (!currentUserId) return;
+    const isLiked = currentLikes.includes(currentUserId);
+    const newLikes = isLiked 
+      ? currentLikes.filter(id => id !== currentUserId)
+      : [...currentLikes, currentUserId];
+
+    setPitches(prev => prev.map(p => p.id === pitchId ? { ...p, liked_by: newLikes } : p));
+    if (selectedPitch && selectedPitch.id === pitchId) {
+      setSelectedPitch({ ...selectedPitch, liked_by: newLikes });
+    }
+    const { error } = await supabase.rpc('toggle_like', {
+      target_pitch_id: pitchId,
+      target_user_id: currentUserId
+    });
+    
+    if (error) {
+      console.error('Failed to toggle like:', error);
+      alert('Error saving like: ' + error.message);
+    }
+  };
+
+  const handleShareProfile = async (username?: string) => {
+    if (!username) return;
+    const url = `${window.location.origin}/profile?id=${username}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      alert('Profile link copied to clipboard!');
+    } catch (err) {
+      console.error('Failed to copy link: ', err);
+    }
   };
 
   if (loading) {
@@ -529,6 +562,17 @@ function ProfileContent() {
                     >
                       View Details
                     </button>
+                    <button 
+                      onClick={() => handleToggleLike(pitch.id, pitch.liked_by || [])}
+                      className={`flex items-center gap-1.5 px-4 py-2 border rounded-lg font-bold text-[14px] transition-colors ${
+                        (pitch.liked_by || []).includes(currentUserId) 
+                          ? 'bg-rose-50 border-rose-200 text-rose-500 hover:bg-rose-100 dark:bg-rose-500/10 dark:border-rose-500/30' 
+                          : 'bg-background border-border hover:bg-slate-50 dark:hover:bg-slate-800'
+                      }`}
+                    >
+                      <Heart className={`w-4 h-4 ${(pitch.liked_by || []).includes(currentUserId) ? 'fill-current' : ''}`} />
+                      {(pitch.liked_by || []).length > 0 ? (pitch.liked_by || []).length + ' ' : ''}Like{(pitch.liked_by || []).length !== 1 && (pitch.liked_by || []).length > 0 ? 's' : ''}
+                    </button>
                     {isOwnProfile && (
                       <>
                         <Link href={`/publish?edit=${pitch.id}`} className="px-4 py-2 bg-transparent border border-border hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors rounded-lg font-bold text-[14px] flex items-center justify-center">
@@ -542,7 +586,10 @@ function ProfileContent() {
                         </button>
                       </>
                     )}
-                    <button className="px-4 py-2 bg-transparent border border-border hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors rounded-lg font-bold text-[14px]">
+                    <button 
+                      onClick={() => handleShareProfile(profile?.username)}
+                      className="px-4 py-2 bg-transparent border border-border hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors rounded-lg font-bold text-[14px]"
+                    >
                       Share
                     </button>
                   </div>
@@ -555,136 +602,174 @@ function ProfileContent() {
 
       {/* Expanded Pitch Modal */}
       {selectedPitch && (
-        <div className="fixed inset-0 z-50 flex justify-center bg-black/60 backdrop-blur-sm p-4 sm:pt-[5%] overflow-y-auto">
-          <div className="bg-background w-full max-w-2xl h-fit rounded-2xl border border-border flex flex-col shadow-2xl relative mb-8 overflow-hidden">
+        <div className="fixed inset-0 z-50 flex justify-center bg-black/60 backdrop-blur-sm p-4 sm:p-8 overflow-y-auto">
+          <div className="bg-background w-full max-w-5xl h-fit min-h-[600px] rounded-2xl border border-border shadow-2xl relative mb-8 flex flex-col md:flex-row overflow-hidden">
             
-            {/* Modal Banner */}
-            <div className="w-full aspect-[3/1] bg-slate-200 dark:bg-slate-800 relative">
-              <button onClick={() => setSelectedPitch(null)} className="absolute top-4 right-4 z-10 w-9 h-9 bg-black/50 text-white rounded-full flex items-center justify-center hover:bg-black/70 transition-colors">
-                <X className="w-5 h-5" />
-              </button>
-              {selectedPitch.cover_banner_url && <img src={selectedPitch.cover_banner_url} className="w-full h-full object-cover" />}
-              <div className="absolute -bottom-10 left-6 w-24 h-24 bg-slate-300 dark:bg-slate-700 rounded-full border-[6px] border-background flex items-center justify-center overflow-hidden text-2xl font-bold">
-                {selectedPitch.profiles?.avatar_url ? (
-                  <img src={selectedPitch.profiles.avatar_url} className="w-full h-full object-cover" />
-                ) : (
-                  <img src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&q=80" className="w-full h-full object-cover" />
+            <button onClick={() => setSelectedPitch(null)} className="absolute top-4 right-4 z-20 w-9 h-9 bg-black/50 text-white rounded-full flex items-center justify-center hover:bg-black/70 transition-colors">
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Left Column - Main Content */}
+            <div className="flex-1 flex flex-col border-r border-border bg-background">
+              {/* Modal Banner */}
+              <div className="w-full aspect-[3/1] bg-slate-200 dark:bg-slate-800 relative shrink-0">
+                {selectedPitch.cover_banner_url && <img src={selectedPitch.cover_banner_url} className="w-full h-full object-cover" />}
+                <div className="absolute -bottom-10 left-6 w-24 h-24 bg-slate-300 dark:bg-slate-700 rounded-full border-[6px] border-background flex items-center justify-center overflow-hidden text-2xl font-bold">
+                  {selectedPitch.profiles?.avatar_url ? (
+                    <img src={selectedPitch.profiles.avatar_url} className="w-full h-full object-cover" />
+                  ) : (
+                    <img src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&q=80" className="w-full h-full object-cover" />
+                  )}
+                </div>
+              </div>
+
+              <div className="p-6 pt-14 flex flex-col gap-1 flex-1">
+                <h4 className="font-extrabold text-3xl leading-tight">{selectedPitch.full_name}</h4>
+                <p className="text-xl leading-tight text-foreground/90 font-medium mt-1">{selectedPitch.tagline}</p>
+                
+                <div className="flex items-center gap-2 mt-2 text-[15px] font-medium">
+                  <span className="text-indigo-500 font-bold">
+                    {selectedPitch.persona_type === 'job_seeker' ? 'Open to hire' : selectedPitch.persona_type === 'freelancer' ? 'Available for projects' : 'Open for collabs'}
+                  </span>
+                  <span className="text-muted-foreground">•</span>
+                  <span className="text-muted-foreground">{selectedPitch.location} - {selectedPitch.industry}</span>
+                </div>
+
+                {selectedPitch.portfolio_link && (
+                  <div className="mt-4">
+                    <a href={selectedPitch.portfolio_link.startsWith('http') ? selectedPitch.portfolio_link : `https://${selectedPitch.portfolio_link}`} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 text-[14px] text-indigo-500 hover:underline font-medium">
+                      <LinkIcon className="w-4 h-4" /> {selectedPitch.portfolio_link}
+                    </a>
+                  </div>
                 )}
+
+                {selectedPitch.portfolio_images && selectedPitch.portfolio_images.length > 0 && (
+                  <div className="mt-8">
+                    <h3 className="font-bold text-lg mb-3">Portfolio Showcase</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {selectedPitch.portfolio_images.map((img: string, idx: number) => img && (
+                        <div key={idx} className="aspect-[4/3] bg-slate-100 dark:bg-slate-800 rounded-xl overflow-hidden border border-border">
+                          <img src={img} className="w-full h-full object-cover hover:scale-105 transition-transform duration-300" />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex gap-4 mt-auto pt-8 pb-2">
+                  <button className="flex-1 py-3.5 bg-indigo-500 hover:bg-indigo-600 text-white transition-colors rounded-xl font-bold text-[16px] shadow-lg shadow-indigo-500/20">
+                    {selectedPitch.persona_type === 'job_seeker' ? 'Apply now' : selectedPitch.persona_type === 'freelancer' ? 'Hire for project' : 'Request collab'}
+                  </button>
+                  <button 
+                    onClick={() => handleToggleLike(selectedPitch.id, selectedPitch.liked_by || [])}
+                    className={`flex items-center gap-1.5 justify-center px-5 py-3.5 border rounded-xl font-bold text-[16px] transition-colors ${
+                      (selectedPitch.liked_by || []).includes(currentUserId) 
+                        ? 'bg-rose-50 border-rose-200 text-rose-500 hover:bg-rose-100 dark:bg-rose-500/10 dark:border-rose-500/30' 
+                        : 'bg-background border-border hover:bg-slate-50 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    <Heart className={`w-5 h-5 ${(selectedPitch.liked_by || []).includes(currentUserId) ? 'fill-current' : ''}`} />
+                    {(selectedPitch.liked_by || []).length > 0 ? (selectedPitch.liked_by || []).length + ' ' : ''}Like{(selectedPitch.liked_by || []).length !== 1 && (selectedPitch.liked_by || []).length > 0 ? 's' : ''}
+                  </button>
+                  <button 
+                    onClick={() => handleShareProfile(profile?.username)}
+                    className="px-5 py-3.5 bg-transparent border border-border hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors rounded-xl font-bold text-[16px]"
+                  >
+                    Share
+                  </button>
+                  {isOwnProfile && (
+                    <Link href={`/publish?edit=${selectedPitch.id}`} className="px-6 py-3.5 bg-transparent border border-border hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors rounded-xl font-bold text-[16px] flex items-center justify-center">
+                      Edit Pitch
+                    </Link>
+                  )}
+                </div>
               </div>
             </div>
 
-            <div className="p-6 pt-14 flex flex-col gap-1">
-              <h4 className="font-extrabold text-2xl leading-tight">{selectedPitch.full_name}</h4>
-              <p className="text-lg leading-tight text-muted-foreground mt-1">{selectedPitch.tagline}</p>
+            {/* Right Column - Details */}
+            <div className="w-full md:w-[350px] bg-slate-50/50 dark:bg-[#16181c]/50 flex flex-col p-6 overflow-y-auto">
               
-              <div className="flex items-center gap-2 mt-2 text-[15px] font-medium">
-                <span className="text-indigo-500 font-bold">
-                  {selectedPitch.persona_type === 'job_seeker' ? 'Open to hire' : selectedPitch.persona_type === 'freelancer' ? 'Available for projects' : 'Open for collabs'}
-                </span>
-                <span className="text-muted-foreground">•</span>
-                <span className="text-muted-foreground">{selectedPitch.location} - {selectedPitch.industry}</span>
-              </div>
+              {selectedPitch.about && (
+                <div className="mb-6">
+                  <h3 className="font-bold text-lg mb-3">About</h3>
+                  <p className="text-[15px] leading-relaxed whitespace-pre-wrap text-muted-foreground">{renderFormattedText(selectedPitch.about)}</p>
+                </div>
+              )}
 
               {selectedPitch.skills && selectedPitch.skills.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-4">
-                  {selectedPitch.skills.map((skill: string, i: number) => skill.trim() && (
-                    <span key={i} className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[13px] font-bold rounded-lg">
-                      {skill.trim()}
-                    </span>
-                  ))}
-                </div>
-              )}
-
-              {selectedPitch.portfolio_link && (
-                <div className="mt-4">
-                  <a href={selectedPitch.portfolio_link.startsWith('http') ? selectedPitch.portfolio_link : `https://${selectedPitch.portfolio_link}`} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 text-[14px] text-indigo-500 hover:underline font-medium">
-                    <LinkIcon className="w-4 h-4" /> {selectedPitch.portfolio_link}
-                  </a>
-                </div>
-              )}
-
-              {selectedPitch.about && (
-                <div className="mt-6">
-                  <h3 className="font-bold text-lg mb-2">About</h3>
-                  <p className="text-[15px] leading-relaxed whitespace-pre-wrap text-muted-foreground bg-slate-50 dark:bg-[#16181c] p-4 rounded-xl border border-border">{renderFormattedText(selectedPitch.about)}</p>
-                </div>
-              )}
-
-              {selectedPitch.portfolio_images && selectedPitch.portfolio_images.length > 0 && (
-                <div className="mt-6">
-                  <h3 className="font-bold text-lg mb-2">Portfolio Showcase</h3>
-                  <div className="grid grid-cols-2 gap-3">
-                    {selectedPitch.portfolio_images.map((img: string, idx: number) => img && (
-                      <div key={idx} className="aspect-[4/3] bg-slate-100 dark:bg-slate-800 rounded-xl overflow-hidden border border-border">
-                        <img src={img} className="w-full h-full object-cover hover:scale-105 transition-transform duration-300" />
-                      </div>
+                <div className="mb-6">
+                  <h3 className="font-bold text-lg mb-3">Skills</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedPitch.skills.map((skill: string, i: number) => skill.trim() && (
+                      <span key={i} className="px-3 py-1.5 bg-slate-200/50 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 text-[13px] font-bold rounded-lg border border-border/50">
+                        {skill.trim()}
+                      </span>
                     ))}
                   </div>
                 </div>
               )}
 
-              {/* Stats */}
-              <div className="mt-6">
-                 <h3 className="font-bold text-lg mb-2">Details</h3>
-                 <div className="grid grid-cols-2 gap-3">
+              <div>
+                <h3 className="font-bold text-lg mb-3">Details</h3>
+                <div className="flex flex-col gap-3">
                   {selectedPitch.persona_type === 'job_seeker' && (
                     <>
-                      <div className="bg-slate-50 dark:bg-[#16181c] border border-border rounded-xl p-4 flex flex-col justify-center">
-                        <span className="text-[12px] text-muted-foreground font-semibold uppercase">Desired job title</span>
-                        <span className="font-bold text-[16px] mt-1">{selectedPitch.desired_job_title}</span>
+                      <div className="bg-slate-50 dark:bg-[#16181c] border border-border rounded-xl p-3.5 flex flex-col justify-center">
+                        <span className="text-[11px] text-muted-foreground font-semibold uppercase tracking-wide">Desired job title</span>
+                        <span className="font-bold text-[15px] mt-1">{selectedPitch.desired_job_title}</span>
                       </div>
-                      <div className="bg-slate-50 dark:bg-[#16181c] border border-border rounded-xl p-4 flex flex-col justify-center">
-                        <span className="text-[12px] text-muted-foreground font-semibold uppercase">Experience</span>
-                        <span className="font-bold text-[16px] mt-1">{selectedPitch.experience_level}</span>
+                      <div className="bg-slate-50 dark:bg-[#16181c] border border-border rounded-xl p-3.5 flex flex-col justify-center">
+                        <span className="text-[11px] text-muted-foreground font-semibold uppercase tracking-wide">Experience</span>
+                        <span className="font-bold text-[15px] mt-1">{selectedPitch.experience_level}</span>
                       </div>
-                      <div className="bg-slate-50 dark:bg-[#16181c] border border-border rounded-xl p-4 flex flex-col justify-center">
-                        <span className="text-[12px] text-muted-foreground font-semibold uppercase">Notice Period</span>
-                        <span className="font-bold text-[16px] mt-1">{selectedPitch.notice_period || 'Immediate'}</span>
+                      <div className="bg-slate-50 dark:bg-[#16181c] border border-border rounded-xl p-3.5 flex flex-col justify-center">
+                        <span className="text-[11px] text-muted-foreground font-semibold uppercase tracking-wide">Notice Period</span>
+                        <span className="font-bold text-[15px] mt-1">{selectedPitch.notice_period || 'Immediate'}</span>
                       </div>
                       {selectedPitch.expected_salary && (
-                         <div className="bg-slate-50 dark:bg-[#16181c] border border-border rounded-xl p-4 flex flex-col justify-center">
-                           <span className="text-[12px] text-muted-foreground font-semibold uppercase">Expected Salary</span>
-                           <span className="font-bold text-[16px] mt-1">₹{selectedPitch.expected_salary.toLocaleString()} / mo</span>
+                         <div className="bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/30 rounded-xl p-3.5 flex flex-col justify-center">
+                           <span className="text-[11px] text-indigo-600 dark:text-indigo-400 font-semibold uppercase tracking-wide">Expected Salary</span>
+                           <span className="font-bold text-[15px] text-indigo-700 dark:text-indigo-300 mt-1">₹{selectedPitch.expected_salary.toLocaleString()} / mo</span>
                          </div>
                       )}
                     </>
                   )}
                   {selectedPitch.persona_type === 'freelancer' && (
                     <>
-                      <div className="bg-slate-50 dark:bg-[#16181c] border border-border rounded-xl p-4 flex flex-col justify-center">
-                        <span className="text-[12px] text-muted-foreground font-semibold uppercase">Turnaround</span>
-                        <span className="font-bold text-[16px] mt-1">{selectedPitch.turnaround_time}</span>
+                      <div className="bg-slate-50 dark:bg-[#16181c] border border-border rounded-xl p-3.5 flex flex-col justify-center">
+                        <span className="text-[11px] text-muted-foreground font-semibold uppercase tracking-wide">Turnaround</span>
+                        <span className="font-bold text-[15px] mt-1">{selectedPitch.turnaround_time}</span>
                       </div>
-                      <div className="bg-slate-50 dark:bg-[#16181c] border border-border rounded-xl p-4 flex flex-col justify-center">
-                        <span className="text-[12px] text-muted-foreground font-semibold uppercase">Availability</span>
-                        <span className="font-bold text-[16px] mt-1">{selectedPitch.hours_available} hrs/wk</span>
+                      <div className="bg-slate-50 dark:bg-[#16181c] border border-border rounded-xl p-3.5 flex flex-col justify-center">
+                        <span className="text-[11px] text-muted-foreground font-semibold uppercase tracking-wide">Availability</span>
+                        <span className="font-bold text-[15px] mt-1">{selectedPitch.hours_available} hrs/wk</span>
                       </div>
                       {selectedPitch.hourly_rate && (
-                         <div className="bg-slate-50 dark:bg-[#16181c] border border-border rounded-xl p-4 flex flex-col justify-center">
-                           <span className="text-[12px] text-muted-foreground font-semibold uppercase">Hourly Rate</span>
-                           <span className="font-bold text-[16px] mt-1">₹{selectedPitch.hourly_rate.toLocaleString()} / hr</span>
+                         <div className="bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/30 rounded-xl p-3.5 flex flex-col justify-center">
+                           <span className="text-[11px] text-indigo-600 dark:text-indigo-400 font-semibold uppercase tracking-wide">Hourly Rate</span>
+                           <span className="font-bold text-[15px] text-indigo-700 dark:text-indigo-300 mt-1">₹{selectedPitch.hourly_rate.toLocaleString()} / hr</span>
                          </div>
                       )}
                     </>
                   )}
                   {selectedPitch.persona_type === 'influencer' && (
                     <>
-                      <div className="bg-slate-50 dark:bg-[#16181c] border border-border rounded-xl p-4 flex flex-col justify-center">
-                        <span className="text-[12px] text-muted-foreground font-semibold uppercase">Content niche</span>
-                        <span className="font-bold text-[16px] mt-1">{selectedPitch.content_niche}</span>
+                      <div className="bg-slate-50 dark:bg-[#16181c] border border-border rounded-xl p-3.5 flex flex-col justify-center">
+                        <span className="text-[11px] text-muted-foreground font-semibold uppercase tracking-wide">Content niche</span>
+                        <span className="font-bold text-[15px] mt-1">{selectedPitch.content_niche}</span>
                       </div>
-                      <div className="bg-slate-50 dark:bg-[#16181c] border border-border rounded-xl p-4 flex flex-col justify-center">
-                        <span className="text-[12px] text-muted-foreground font-semibold uppercase">Social Followers</span>
-                        <span className="font-bold text-[16px] mt-1">{selectedPitch.followers_count}</span>
+                      <div className="bg-slate-50 dark:bg-[#16181c] border border-border rounded-xl p-3.5 flex flex-col justify-center">
+                        <span className="text-[11px] text-muted-foreground font-semibold uppercase tracking-wide">Social Followers</span>
+                        <span className="font-bold text-[15px] mt-1">{selectedPitch.followers_count}</span>
                       </div>
-                      <div className="bg-slate-50 dark:bg-[#16181c] border border-border rounded-xl p-4 flex flex-col justify-center">
-                        <span className="text-[12px] text-muted-foreground font-semibold uppercase">Engagement Rate</span>
-                        <span className="font-bold text-[16px] mt-1">{selectedPitch.engagement_rate || 'N/A'}</span>
+                      <div className="bg-slate-50 dark:bg-[#16181c] border border-border rounded-xl p-3.5 flex flex-col justify-center">
+                        <span className="text-[11px] text-muted-foreground font-semibold uppercase tracking-wide">Engagement Rate</span>
+                        <span className="font-bold text-[15px] mt-1">{selectedPitch.engagement_rate || 'N/A'}</span>
                       </div>
                        {selectedPitch.rate_per_post && (
-                         <div className="bg-slate-50 dark:bg-[#16181c] border border-border rounded-xl p-4 flex flex-col justify-center">
-                           <span className="text-[12px] text-muted-foreground font-semibold uppercase">Rate per Post</span>
-                           <span className="font-bold text-[16px] mt-1">₹{selectedPitch.rate_per_post.toLocaleString()}</span>
+                         <div className="bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/30 rounded-xl p-3.5 flex flex-col justify-center">
+                           <span className="text-[11px] text-indigo-600 dark:text-indigo-400 font-semibold uppercase tracking-wide">Rate per Post</span>
+                           <span className="font-bold text-[15px] text-indigo-700 dark:text-indigo-300 mt-1">₹{selectedPitch.rate_per_post.toLocaleString()}</span>
                          </div>
                        )}
                     </>
@@ -692,14 +777,6 @@ function ProfileContent() {
                 </div>
               </div>
 
-              <div className="flex gap-4 mt-8 pb-4">
-                <button className="flex-1 py-3.5 bg-indigo-500 hover:bg-indigo-600 text-white transition-colors rounded-xl font-bold text-[16px] shadow-lg shadow-indigo-500/20">
-                  {selectedPitch.persona_type === 'job_seeker' ? 'Apply now' : selectedPitch.persona_type === 'freelancer' ? 'Hire for project' : 'Request collab'}
-                </button>
-                <Link href={`/publish?edit=${selectedPitch.id}`} className="px-6 py-3.5 bg-transparent border border-border hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors rounded-xl font-bold text-[16px] flex items-center justify-center">
-                  Edit Pitch
-                </Link>
-              </div>
             </div>
           </div>
         </div>
