@@ -108,7 +108,8 @@ function ProfileContent() {
 
   // Open followers/following modal and load real list
   const openFollowModal = useCallback(async (type: 'followers' | 'following') => {
-    if (!currentUserId) return;
+    const targetId = viewedId || currentUserId;
+    if (!targetId || !currentUserId) return;
     setFollowModal(type);
     setModalLoading(true);
     setModalList([]);
@@ -116,18 +117,18 @@ function ProfileContent() {
     let profileIds: string[] = [];
 
     if (type === 'followers') {
-      // People who follow ME: follower_id
+      // People who follow the viewed user
       const { data } = await supabase
         .from('follows')
         .select('follower_id')
-        .eq('following_id', currentUserId);
+        .eq('following_id', targetId);
       profileIds = (data ?? []).map((r: any) => r.follower_id);
     } else {
-      // People I follow: following_id
+      // People the viewed user follows
       const { data } = await supabase
         .from('follows')
         .select('following_id')
-        .eq('follower_id', currentUserId);
+        .eq('follower_id', targetId);
       profileIds = (data ?? []).map((r: any) => r.following_id);
     }
 
@@ -158,7 +159,7 @@ function ProfileContent() {
     }
 
     setModalLoading(false);
-  }, [currentUserId, supabase]);
+  }, [currentUserId, supabase, viewedId]);
 
   // Toggle follow / unfollow for a user in the modal
   const handleToggleFollow = async (targetId: string) => {
@@ -172,15 +173,17 @@ function ProfileContent() {
         .eq('follower_id', currentUserId)
         .eq('following_id', targetId);
       setFollowingMap(prev => ({ ...prev, [targetId]: false }));
-      // If viewing 'following' list and we unfollowed, remove from list + update count
-      if (followModal === 'following') {
+      // If viewing 'following' list and we unfollowed, remove from list + update count (only if own profile)
+      if (followModal === 'following' && isOwnProfile) {
         setModalList(prev => prev.filter(u => u.id !== targetId));
         setFollowingCount(c => Math.max(0, c - 1));
       }
     } else {
       await supabase.from('follows').insert({ follower_id: currentUserId, following_id: targetId });
       setFollowingMap(prev => ({ ...prev, [targetId]: true }));
-      // Send a follow notification to the target user
+      if (followModal === 'followers' && isOwnProfile) {
+        setFollowingCount(c => c + 1);
+      }  // Send a follow notification to the target user
       await supabase.from('notifications').insert({
         user_id: targetId,
         sender_id: currentUserId,
@@ -414,16 +417,22 @@ function ProfileContent() {
              <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">Pitches Posted</div>
              <div className="text-2xl font-black text-foreground">{pitches.length}</div>
           </div>
-          <div className="w-px bg-border shrink-0 z-10"></div>
-          <div className="flex-1 min-w-[100px] z-10">
-             <div className="text-[11px] font-bold text-emerald-500 uppercase tracking-wider mb-0.5">Purchased</div>
-             <div className="text-2xl font-black text-foreground">{profile?.purchased_pitches ?? 0}</div>
-          </div>
-          <div className="w-px bg-border shrink-0 z-10"></div>
-          <div className="flex-1 min-w-[100px] z-10">
-             <div className="text-[11px] font-bold text-indigo-500 uppercase tracking-wider mb-0.5">Remaining</div>
-             <div className="text-2xl font-black text-foreground">{Math.max(0, (profile?.available_pitches ?? 3) - pitches.length)}</div>
-          </div>
+          
+          {isOwnProfile && (
+            <>
+              <div className="w-px bg-border shrink-0 z-10"></div>
+              <div className="flex-1 min-w-[100px] z-10">
+                 <div className="text-[11px] font-bold text-emerald-500 uppercase tracking-wider mb-0.5">Purchased</div>
+                 <div className="text-2xl font-black text-foreground">{profile?.purchased_pitches ?? 0}</div>
+              </div>
+              <div className="w-px bg-border shrink-0 z-10"></div>
+              <div className="flex-1 min-w-[100px] z-10">
+                 <div className="text-[11px] font-bold text-indigo-500 uppercase tracking-wider mb-0.5">Remaining</div>
+                 <div className="text-2xl font-black text-foreground">{Math.max(0, (profile?.available_pitches ?? 3) - pitches.length)}</div>
+              </div>
+            </>
+          )}
+
           <div className="w-px bg-border shrink-0 z-10"></div>
           <div className="flex-1 min-w-[100px] z-10">
              <div className="text-[11px] font-bold text-violet-500 uppercase tracking-wider mb-0.5">Followers</div>
@@ -520,15 +529,19 @@ function ProfileContent() {
                     >
                       View Details
                     </button>
-                    <Link href={`/publish?edit=${pitch.id}`} className="px-4 py-2 bg-transparent border border-border hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors rounded-lg font-bold text-[14px] flex items-center justify-center">
-                      Edit
-                    </Link>
-                    <button 
-                      onClick={() => handleDeletePitch(pitch.id)}
-                      className="px-4 py-2 bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 transition-colors rounded-lg font-bold text-[14px]"
-                    >
-                      Delete
-                    </button>
+                    {isOwnProfile && (
+                      <>
+                        <Link href={`/publish?edit=${pitch.id}`} className="px-4 py-2 bg-transparent border border-border hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors rounded-lg font-bold text-[14px] flex items-center justify-center">
+                          Edit
+                        </Link>
+                        <button 
+                          onClick={() => handleDeletePitch(pitch.id)}
+                          className="px-4 py-2 bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 transition-colors rounded-lg font-bold text-[14px]"
+                        >
+                          Delete
+                        </button>
+                      </>
+                    )}
                     <button className="px-4 py-2 bg-transparent border border-border hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors rounded-lg font-bold text-[14px]">
                       Share
                     </button>
